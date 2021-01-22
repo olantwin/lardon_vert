@@ -14,17 +14,17 @@ import colorcet as cc
 
 
 
-def draw_current_waveform(crp, view, ch, ax=None, **kwargs):    
+def draw_current_waveform(view, ch, ax=None, **kwargs):    
     
     ax = plt.gca() if ax is None else ax
     
-    ax.plot(dc.data[crp, view, ch, :], **kwargs)
+    ax.plot(dc.data[view, ch, :], **kwargs)
     return ax
 
 
 def plot_wvf_single_current(wvf_list, adc_min=-1, adc_max=-1, option=None, to_be_shown=False):
 
-    """ wvf_list should be a list of tuples as (crp, view, ch)"""
+    """ wvf_list should be a list of tuples as (view, ch)"""
 
     n_wvf = len(wvf_list)
 
@@ -34,12 +34,13 @@ def plot_wvf_single_current(wvf_list, adc_min=-1, adc_max=-1, option=None, to_be
 
     
     for i in range(n_wvf):
-        (crp, view, ch) = wvf_list[i]
-        legend = "crp "+str(crp)+ " v"+str(view)+" ch"+str(ch)
-        ax[i] = draw_current_waveform(crp, view, ch, ax=ax[i], label=legend, c='k')
+        (view, ch) = wvf_list[i]
+        legend = " v"+str(view)+" ch"+str(ch)
+        ax[i] = draw_current_waveform(view, ch, ax=ax[i], label=legend, c='k')
+
         ax[i].set_ylabel('ADC')
         ax[i].legend(loc='upper right')
-        ax[i].set_xlim([0, 10000])
+        ax[i].set_xlim([0, cf.n_Sample])
         if(adc_min > -1):
             ax[i].set_ybound(lower=adc_min)
         if(adc_max > -1):
@@ -58,17 +59,17 @@ def plot_wvf_single_current(wvf_list, adc_min=-1, adc_max=-1, option=None, to_be
         option = ""
 
 
-    run_nb = str(dc.evt_list[-1].run_nb)
-    evt_nb = str(dc.evt_list[-1].evt_nb_glob)
+    run_day = str(dc.evt_list[-1].date)
+    evt_nb = str(dc.evt_list[-1].evt_nb)
 
-    plt.savefig('ED/waveforms'+option+'_run_'+run_nb+'_evt_'+evt_nb+'.png')
+    plt.savefig('ED/waveforms'+option+'_'+run_day+'_evt_'+evt_nb+'.png')
     if(to_be_shown):
         plt.show()
     plt.close()
 
 
 def plot_wvf_multi_current(wvf_list, adc_min=-1, adc_max=-1, option=None, to_be_shown=False):
-    """ wvf_list should be a list of tuples as (crp, view, ch)"""
+    """ wvf_list should be a list of tuples as (view, ch)"""
 
     n_wvf = len(wvf_list)
 
@@ -77,13 +78,13 @@ def plot_wvf_multi_current(wvf_list, adc_min=-1, adc_max=-1, option=None, to_be_
 
     
     for i in range(n_wvf):
-        (crp, view, ch) = wvf_list[i]
-        legend = "crp "+str(crp)+ " v"+str(view)+" ch"+str(ch)
-        ax = draw_current_waveform(crp, view, ch, ax=ax, label=legend)
+        (view, ch) = wvf_list[i]
+        legend =" v"+str(view)+" ch"+str(ch)
+        ax = draw_current_waveform(view, ch, ax=ax, label=legend)
         
     ax.set_ylabel('ADC')
     ax.legend(loc='upper right')
-    ax.set_xlim([0, 10000])
+    ax.set_xlim([0, cf.n_Sample])
     if(adc_min > -1):
         ax.set_ybound(lower=adc_min)
     if(adc_max > -1):
@@ -100,10 +101,10 @@ def plot_wvf_multi_current(wvf_list, adc_min=-1, adc_max=-1, option=None, to_be_
         option = ""
 
 
-    run_nb = str(dc.evt_list[-1].run_nb)
-    evt_nb = str(dc.evt_list[-1].evt_nb_glob)
+    run_day = str(dc.evt_list[-1].date)
+    evt_nb = str(dc.evt_list[-1].evt_nb)
 
-    plt.savefig('ED/waveforms_multi'+option+'_run_'+run_nb+'_evt_'+evt_nb+'.png')
+    plt.savefig('ED/waveforms_multi'+option+'_'+run_day+'_evt_'+evt_nb+'.png')
     if(to_be_shown):
         plt.show()
     plt.close()
@@ -128,7 +129,7 @@ def plot_wvf_evo(data, title="", legends=[], adc_min=-1, adc_max=-1, option=None
     ax.set_xlabel('Time')
     ax.set_ylabel('ADC')
     ax.legend(loc='upper right')
-    ax.set_xlim([0, 10000])
+    ax.set_xlim([0, cf.n_Sample])
     if(adc_min > -1):
         ax.set_ybound(lower=adc_min)
     if(adc_max > -1):
@@ -145,10 +146,10 @@ def plot_wvf_evo(data, title="", legends=[], adc_min=-1, adc_max=-1, option=None
         option = ""
 
 
-    run_nb = str(dc.evt_list[-1].run_nb)
-    evt_nb = str(dc.evt_list[-1].evt_nb_glob)
+    run_day = str(dc.evt_list[-1].date)
+    evt_nb = str(dc.evt_list[-1].evt_nb)
 
-    plt.savefig('ED/waveform_evo'+option+'_run_'+run_nb+'_evt_'+evt_nb+'.png')
+    plt.savefig('ED/waveform_evo'+option+'_'+run_day+'_evt_'+evt_nb+'.png')
     if(to_be_shown):
         plt.show()
     plt.close()

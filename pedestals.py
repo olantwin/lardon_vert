@@ -1,9 +1,24 @@
 import config as cf
 import data_containers as dc
-import glob 
 
 import numba as nb
 import numpy as np
+import bottleneck as bn
+
+
+
+def ini_pedestal():
+    ped_mean = bn.move_mean(dc.data, window=50, axis=-1)
+    ped_std  = bn.move_std(dc.data, window=50, axis=-1)
+    ped_std  = np.nan_to_num(ped_std, nan=9999.)
+
+    idx = np.argmin(ped_std, axis=-1)
+
+    dc.ped_mean = np.take_along_axis(ped_mean, np.expand_dims(idx, axis=-1), axis=-1)[:,:,0]
+    dc.ped_rms  = np.take_along_axis(ped_std, np.expand_dims(idx, axis=-1), axis=-1)[:,:,0]
+
+
+
 
 @nb.jit(nopython = True)
 def compute_pedestal_RMS_nb(data, mask):
@@ -38,80 +53,42 @@ def compute_pedestal_RMS_nb(data, mask):
 
 def compute_pedestal_RMS():
     """ the numpy way is slower and cannot handle well dead channels """
-    #dc.ped_rms =  np.std(dc.data[dc.mask], axis=3)
     dc.ped_rms = compute_pedestal_RMS_nb(dc.data, dc.mask)
+
 
 def compute_pedestal_mean():
     """ the numpy way may be faster but do not handle dead channels """
-    #dc.ped_mean = np.mean(dc.data[dc.mask], axis=3)
 
     with np.errstate(divide='ignore', invalid='ignore'):
-        dc.ped_mean = np.einsum('ijkl,ijkl->ijk', dc.data, dc.mask)/dc.mask.sum(axis=3)
+        dc.ped_mean = np.einsum('ijk,ijk->ij', dc.data, dc.mask)/dc.mask.sum(axis=2)
         """require at least 3 points to take into account the mean"""
-        dc.ped_mean[dc.mask.sum(axis=3) < 3] = -999.
+        dc.ped_mean[dc.mask.sum(axis=2) < 3] = -999.
 
 
 
-
-def get_reference_ped_mean(i):
-    return dc.map_ped[i].ref_ped
-
-def get_reference_ped_RMS(i):
-    return dc.map_ped[i].ref_rms
-
-def get_closest_ped_run(run):
-    calib_runs = glob.glob(cf.calib_path+"noise*.dat")
-    crop = len(cf.calib_path)+6 #for 'noise_'
-    calib_runs_nb = [elem[crop:] for elem in calib_runs]
-    calib_runs_nb = [int(elem[:elem.find("_")]) for elem in calib_runs_nb]
-
-    if(run >= calib_runs_nb[-1]):
-        return calib_runs[-1]
-    else:
-        for irun in range(len(calib_runs_nb)-1):
-            if(calib_runs_nb[irun+1] > run):
-                return calib_runs[irun]
-    return calib_runs[0] #in case of problems
-
-def map_reference_pedestal(run):
-    reference_file = get_closest_ped_run(run)
-    print("Will use calibration run : ", reference_file)
-
-    with open(reference_file, "r") as pedcalib:
-        for iline in pedcalib:
-            li = iline.split()
-            daqch = int(li[0])
-            ped = float(li[7])
-            rms = float(li[9])
-            dc.map_ped[daqch].set_ref_pedestal(ped, rms)
-
-def store_raw_ped_rms(bad_mean_thr):
-    
-    compute_pedestal_mean()
-    compute_pedestal_RMS()
-    n_bad = 0
+def store_raw_ped_rms():
     """ store the raw pedestal and rms """
     for i in range(cf.n_ChanTot):
-        crp, view, ch = dc.map_ped[i].get_ana_chan()
-        if(crp >= cf.n_CRPUsed): continue
-        dc.map_ped[i].set_raw_pedestal(dc.ped_mean[crp,view,ch], dc.ped_rms[crp,view,ch])
-        if(dc.ped_mean[crp,view,ch] < bad_mean_thr):
-            n_bad += 1
+        view, ch = dc.map_ped[i].get_ana_chan()        
+        dc.map_ped[i].set_raw_pedestal(dc.ped_mean[view,ch], dc.ped_rms[view,ch])
+        dc.ped_mean[view, ch] = 0.
 
-    return n_bad
-        
-        
-        
+def subtract_ped_mean():
+    for i in range(cf.n_ChanTot):
+        view, ch = dc.map_ped[i].get_ana_chan()        
+        if(dc.ped_mean[view,ch] != -999.):
+            dc.data[view, ch] -= dc.ped_mean[view,ch]
 
-
-
-def store_final_ped_rms():
-
+def compute_ped():
     compute_pedestal_mean()
     compute_pedestal_RMS()
 
+def compute_and_subtract_ped():
+    compute_ped()
+    subtract_ped_mean()
+
+def store_final_ped_rms():
     for i in range(cf.n_ChanTot):
-        crp, view, ch = dc.map_ped[i].get_ana_chan()
-        if(crp >= cf.n_CRPUsed): continue
-        dc.map_ped[i].set_evt_pedestal(dc.ped_mean[crp,view,ch], dc.ped_rms[crp,view,ch])
+        view, ch = dc.map_ped[i].get_ana_chan()
+        dc.map_ped[i].set_evt_pedestal(dc.ped_mean[view,ch], dc.ped_rms[view,ch])
 

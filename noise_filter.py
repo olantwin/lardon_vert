@@ -10,27 +10,40 @@ import bottleneck as bn
 from sklearn import linear_model
 
 
-    
 
 def define_ROI_ADC(thresh):
-    dc.mask = ne.evaluate( "where((data > thresh) | ~alive_chan, 0, 1)", global_dict={'data':dc.data, 'alive_chan':dc.alive_chan}).astype(bool)
+    thresh_coll = thresh[0]
+    dc.mask[0,:,:] = ne.evaluate( "where((data > thresh_coll) | ~alive_chan, 0, 1)", global_dict={'data':dc.data[0,:,:], 'alive_chan':dc.alive_chan[0,:,:]}).astype(bool)
+    thresh_ind_p = thresh[1]
+    dc.mask[1,:,:] = ne.evaluate( "where((data > thresh_ind_p) | ~alive_chan, 0, 1)", global_dict={'data':dc.data[1,:,:], 'alive_chan':dc.alive_chan[1,:,:]}).astype(bool)
+    thresh_ind_m = thresh[2]
+    dc.mask[1,:,:] = ne.evaluate( "where((data < thresh_ind_m) | ~alive_chan |~mask, 0, 1)", global_dict={'data':dc.data[1,:,:], 'alive_chan':dc.alive_chan[1,:,:], 'mask':dc.mask[1,:,:]}).astype(bool)
 
 
-def define_ROI(sig_thresh, iteration):
+def define_ROI(thresh, iteration):
     #ne.set_num_threads(4) #does not speed up things
+    thresh_coll = thresh[0]
+    thresh_ind_p = thresh[1]
+    thresh_ind_m = thresh[2]
 
     """ Update the mask based on pedestal RMS """    
     for it in range(iteration):
-        ped.compute_pedestal_RMS()
 
-        dc.ped_rms = dc.ped_rms[:,:,:,None]
-        dc.ped_mean = dc.ped_mean[:,:,:,None]
+        dc.ped_rms = dc.ped_rms[:,:,None]
+        dc.ped_mean = dc.ped_mean[:,:,None]
 
-        dc.mask = ne.evaluate( "where((data > mean + sig_thresh*rms) | (~alive_chan), 0, 1)", global_dict={'data':dc.data, 'alive_chan':dc.alive_chan, 'rms':dc.ped_rms, 'mean':dc.ped_mean}).astype(bool)
+
+        dc.mask[0,:,:] = ne.evaluate( "where((data > mean + thresh_coll*rms) | (~alive_chan), 0, 1)", global_dict={'data':dc.data[0,:,:], 'alive_chan':dc.alive_chan[0,:,:], 'rms':dc.ped_rms[0,:,:], 'mean':dc.ped_mean[0,:,:]}).astype(bool)
+
+        dc.mask[1,:,:] = ne.evaluate( "where((data > mean + thresh_ind_p*rms) | (~alive_chan), 0, 1)", global_dict={'data':dc.data[1,:,:], 'alive_chan':dc.alive_chan[1,:,:], 'rms':dc.ped_rms[1,:,:], 'mean':dc.ped_mean[1,:,:]}).astype(bool)
+
+        dc.mask[1,:,:] = ne.evaluate( "where((data < mean - thresh_ind_m*rms) | (~alive_chan) | ~mask, 0, 1)", global_dict={'data':dc.data[1,:,:], 'alive_chan':dc.alive_chan[1,:,:], 'mask':dc.mask[1,:,:], 'rms':dc.ped_rms[1,:,:], 'mean':dc.ped_mean[1,:,:]}).astype(bool)
         
-        dc.ped_rms = np.squeeze(dc.ped_rms, axis=3)
-        dc.ped_mean = np.squeeze(dc.ped_mean, axis=3)
+        dc.ped_rms = np.squeeze(dc.ped_rms, axis=2)
+        dc.ped_mean = np.squeeze(dc.ped_mean, axis=2)
 
+        ped.compute_pedestal_RMS()
+        ped.compute_pedestal_mean()
 
 def coherent_filter(groupings):
     """
@@ -39,34 +52,33 @@ def coherent_filter(groupings):
     """
 
     for group in groupings:
-        print("apply coherent filter in groups of", group)
-        if( (cf.n_ChanPerCRP % group) > 0):
+        if( (cf.n_ChanPerView % group) > 0):
             print(" Coherent Noise Filter in groups of ", group, " is not a possible ! ")
             return
 
-        nslices = int(cf.n_ChanPerCRP / group)
+        nslices = int(cf.n_ChanPerView / group)
         
-        dc.data = np.reshape(dc.data, (cf.n_CRPUsed, cf.n_View, nslices, group, cf.n_Sample))
-        dc.mask = np.reshape(dc.mask, (cf.n_CRPUsed, cf.n_View, nslices, group, cf.n_Sample))
+        dc.data = np.reshape(dc.data, (cf.n_View, nslices, group, cf.n_Sample))
+        dc.mask = np.reshape(dc.mask, (cf.n_View, nslices, group, cf.n_Sample))
 
 
     
         """sum data if mask is true"""
         with np.errstate(divide='ignore', invalid='ignore'):
-            """sum the data along the N channels (subscript l) if mask is true,
+            """sum the data along the N channels (subscript k) if mask is true,
             divide by nb of trues"""
-            mean = np.einsum('ijklm,ijklm->ijkm', dc.data, dc.mask)/dc.mask.sum(axis=3)
+            mean = np.einsum('ijkl,ijkl->ijl', dc.data, dc.mask)/dc.mask.sum(axis=2)
 
             """require at least 3 points to take into account the mean"""
-            mean[dc.mask.sum(axis=3) < 3] = 0.
+            mean[dc.mask.sum(axis=2) < 3] = 0.
         
 
         """Apply the correction to all data points"""
-        dc.data -= mean[:,:,:,None,:]
+        dc.data -= mean[:,:,None,:]
         
         """ restore original data shape """
-        dc.data = np.reshape(dc.data, (cf.n_CRPUsed, cf.n_View, cf.n_ChanPerCRP, cf.n_Sample))
-        dc.mask = np.reshape(dc.mask, (cf.n_CRPUsed, cf.n_View, cf.n_ChanPerCRP, cf.n_Sample))
+        dc.data = np.reshape(dc.data, (cf.n_View, cf.n_ChanPerView, cf.n_Sample))
+        dc.mask = np.reshape(dc.mask, (cf.n_View, cf.n_ChanPerView, cf.n_Sample))
 
 
 
@@ -76,7 +88,7 @@ def gaussian(x, mu, sig):
 
 def FFTLowPass(lowpass, freqlines) :
 
-    """it's 5001 (n/2+1) points from 0Hz to 1./(2*sampling) = 1.25MHz (nyquist freq)"""
+    """it's 324 (n/2+1) points from 0Hz to 1./(2*sampling) = 1.25MHz (nyquist freq)"""
     
     n    = int(cf.n_Sample/2) + 1
     rate = 1./cf.n_Sampling #in MHz
@@ -99,35 +111,34 @@ def FFTLowPass(lowpass, freqlines) :
 
     for f in freqlines:
         fbin = int(f * cf.n_Sample * cf.n_Sampling)
-        for icrp in range(cf.n_CRPUsed):
-            for iview in range(cf.n_View):
-                for ichan in range(cf.n_ChanPerCRP):
-                    ptsx = []
-                    ptsyr = []
-                    ptsyi = []
+        for iview in range(cf.n_View):
+            for ichan in range(cf.n_ChanPerView):
+                ptsx = []
+                ptsyr = []
+                ptsyi = []
 
-                    for i in reversed(range(4)):
-                        ptsx.append(fbin - 5 - i)
-                        ptsyr.append(fdata[icrp, iview, ichan, fbin - 5 - i].real)
-                        ptsyi.append(fdata[icrp, iview, ichan, fbin - 5 - i].imag)
-                    for i in range(4):
-                        ptsx.append(fbin + 5 + i)
-                        ptsyr.append(fdata[icrp, iview, ichan, fbin + 5 + i].real)
-                        ptsyi.append(fdata[icrp, iview, ichan, fbin + 5 + i].imag)
-                    ptsx = np.asarray(ptsx).reshape(-1,1)
-                    ptsyr = np.asarray(ptsyr)
-                    ptsyi = np.asarray(ptsyi)
+                for i in reversed(range(4)):
+                    ptsx.append(fbin - 5 - i)
+                    ptsyr.append(fdata[iview, ichan, fbin - 5 - i].real)
+                    ptsyi.append(fdata[iview, ichan, fbin - 5 - i].imag)
+                for i in range(4):
+                    ptsx.append(fbin + 5 + i)
+                    ptsyr.append(fdata[iview, ichan, fbin + 5 + i].real)
+                    ptsyi.append(fdata[iview, ichan, fbin + 5 + i].imag)
+                ptsx = np.asarray(ptsx).reshape(-1,1)
+                ptsyr = np.asarray(ptsyr)
+                ptsyi = np.asarray(ptsyi)
 
-                    regr.fit(ptsx, ptsyr)
-                    regi.fit(ptsx, ptsyi)
+                regr.fit(ptsx, ptsyr)
+                regi.fit(ptsx, ptsyi)
 
 
-                    xtorm = np.asarray(range(fbin-4,fbin+5)).reshape(-1,1)
-                    yvalr = regr.predict(xtorm)
-                    yvali = regi.predict(xtorm)
+                xtorm = np.asarray(range(fbin-4,fbin+5)).reshape(-1,1)
+                yvalr = regr.predict(xtorm)
+                yvali = regi.predict(xtorm)
 
-                    for ib in range(9):
-                        fdata[icrp,iview,ichan,fbin-4+ib] = complex(yvalr[ib], yvali[ib]) 
+                for ib in range(9):
+                    fdata[iview,ichan,fbin-4+ib] = complex(yvalr[ib], yvali[ib]) 
           
         #gauss_cut[max(fbin-2,0):min(fbin+3,n)] = 0.2
         #gauss_cut[max(fbin-1,0):min(fbin+2,n)] = 0.1
@@ -138,133 +149,33 @@ def FFTLowPass(lowpass, freqlines) :
 
     
     """Apply filter"""
-    fdata *= gauss_cut[None, None, None, :]
+    fdata *= gauss_cut[None, None, :]
 
     """go back to time"""
     dc.data = np.fft.irfft(fdata)
 
 
     """get power spectrum after cut"""
-    #ps = 10.*np.log10(np.abs(fdata)+1e-1) 
-    #return ps
+    ps = 10.*np.log10(np.abs(fdata)+1e-1) 
+    return ps
 
     
-def FFT2D() :
-    
-	for icrp in range(2):
-		for iview in range(2):
-		
-			"""go to the 2D frequency domain"""
-			fft2D=np.fft.fft2(dc.data[icrp,iview,:,:])
-		
-    
-			'''x = np.linspace(0, 10000, 10000 )
-			y = np.linspace(0, 960, 960)
-			X, Y = np.meshgrid(x, y)'''
-			gmask = np.ones((960,10000))
-			
-			"""Low Pass filter"""
-			for i in range(960):
-				gmask[i][400:9600]=0.
-			t=time.time()
-			"""Removing specific frequencies (different for each view and crp)"""
-			if icrp==0 and iview==0:			
-				for i in range(5):
-					gmask[i][20:9980]=0
-					gmask[959-i][20:9980]=0
-				for i in range(13):
-            				gmask[i][86:100]=0
-            				gmask[i][9900:9913]=0
-            				gmask[959-i][86:100]=0
-            				gmask[959-i][9900:9913]=0
-				for i in range(40):
-            				gmask[i][91:96]=0
-            				gmask[i][9905:9909]=0
-            				gmask[959-i][91:96]=0
-            				gmask[959-i][9905:9909]=0
-            				gmask[i][249:251]=0
-            				gmask[i][9749:9751]=0
-            				gmask[959-i][249:251]=0
-            				gmask[959-i][9749:9751]=0
-				for i in range(100):
-            				gmask[i][280:282]=0
-            				gmask[i][9718:9721]=0
-            				gmask[959-i][280:282]=0
-            				gmask[959-i][9718:9721]=0
-				for i in range(40,920):
-            				gmask[i][92:95]=0
-            				gmask[i][9906:9908]=0
-				for i in range(3):
-            				gmask[i][:]=0
-            				gmask[959-i][:]=0
-			
-			if icrp==0 and iview==1:
-				for i in range(5):
-            				gmask[i][20:9980]=0
-            				gmask[959-i][20:9980]=0
-				for i in range(30):
-					gmask[i][92:95]=0
-					gmask[i][9906:9908]=0
-					gmask[959-i][92:95]=0
-					gmask[959-i][9906:9908]=0
-				for i in range(2):
-					gmask[i][:]=0
-					gmask[959-i][:]=0
-			if icrp==1 and iview==0:
-				for i in range(5):
-					gmask[i][20:9980]=0
-					gmask[959-i][20:9980]=0
-				for i in range(30):
-					gmask[i][92:95]=0
-					gmask[i][9906:9908]=0
-					gmask[959-i][92:95]=0
-					gmask[959-i][9906:9908]=0
-				for i in range(2):
-					gmask[i][:]=0
-					gmask[959-i][:]=0
-			if icrp==1 and iview==1:
-				for i in range(5):
-					gmask[i][20:9980]=0
-					gmask[959-i][20:9980]=0
-				for i in range(30):
-					gmask[i][92:95]=0
-					gmask[i][9906:9908]=0
-					gmask[959-i][92:95]=0
-					gmask[959-i][9906:9908]=0
-				for i in range(2):
-					gmask[i][:]=0
-					gmask[959-i][:]=0
-			
-		
-			#gmask = np.where(gmask<0,0,gmask)
-			"""Apply the cuts"""
-			fft2D = fft2D * gmask
-			"""Go back in real space"""
-			filt = np.fft.ifft2(fft2D).real
-			dc.data[icrp,iview,:,:] = filt
-			print("Time to FFT2D: "+str(time.time()-t))
-		
-	#return data #fft2D to see 2D frequency domain
-
-
-
 def centered_median_filter(array, size):
     """ pads the array such that the output is the centered sliding median"""
     rsize = size - size // 2 - 1
-    array = np.pad(array, pad_width=((0, 0), (0, 0), (0, 0) , (0, rsize)),
+    array = np.pad(array, pad_width=((0, 0), (0, 0) , (0, rsize)),
                    mode='constant', constant_values=np.nan)
-    return bn.move_median(array, size, min_count=1, axis=-1)[:, :, :, rsize:]
+    return bn.move_median(array, size, min_count=1, axis=-1)[:, :, rsize:]
 
 
 def median_filter(window):
     """ apply median filter on data to remove microphonic noise """
-    """ only on crp0 and crp1 to save some computing time"""
 
     """ mask the data with nan where potential signal is (ROI)"""
-    med = centered_median_filter(np.where(dc.mask[0:2,:,:,:]==True, dc.data[0:2,:,:,:], np.nan), window)
+    med = centered_median_filter(np.where(dc.mask[:,:,:]==True, dc.data[:,:,:], np.nan), window)
 
     """ in median computation, if everything is masked (all nan) nan is returnedso changed these cases to 0 """
     med = np.nan_to_num(med, nan=0.)
 
     """ apply correction to data points """
-    dc.data[0:2,:,:,:] -= med
+    dc.data[:,:,:] -= med

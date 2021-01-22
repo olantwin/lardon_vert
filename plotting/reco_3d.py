@@ -29,12 +29,12 @@ def plot_3d(option=None, to_be_shown=True):
 
     """ shadow on the walls """
     ax.scatter(x0,
-               [-100 for i in y0], 
+               [0. for i in y0], 
                z0, 
                c="#f2f2f2", s=4)
 
 
-    ax.scatter([300 for i in x1], 
+    ax.scatter([cf.len_det_x for i in x1], 
                y1,
                z1,
                c="#f2f2f2", s=4)
@@ -49,11 +49,9 @@ def plot_3d(option=None, to_be_shown=True):
                c=color_v1, s=4)
 
 
-
-
-    ax.set_xlim3d(-300, 300)
-    ax.set_ylim3d(-100, 300)
-    ax.set_zlim3d(-30, 300)
+    ax.set_xlim3d(0., cf.len_det_x)
+    ax.set_ylim3d(0., cf.len_det_y)
+    ax.set_zlim3d(0., cf.Anode_Z)
     
     ax.set_xlabel('View 0/X [cm]')
     ax.set_ylabel('View 1/Y [cm]')
@@ -97,11 +95,11 @@ def plot_3d(option=None, to_be_shown=True):
         option = ""
 
 
-    run_nb = str(dc.evt_list[-1].run_nb)
-    evt_nb = str(dc.evt_list[-1].evt_nb_glob)
+    run_day = str(dc.evt_list[-1].date)
+    evt_nb = str(dc.evt_list[-1].evt_nb)
 
 
-    plt.savefig('ED/track3D'+option+'_run_'+run_nb+'_evt_'+evt_nb+'.png')
+    plt.savefig('ED/track3D'+option+'_'+run_day+'_evt_'+evt_nb+'.png')
     if(to_be_shown):
         plt.show()
     plt.close()
