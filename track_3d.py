@@ -31,7 +31,7 @@ def complete_trajectory(track, other, view):
 
     """at least 3 points for the spline """
     if(len(z_o) < 4):
-        return -1, [], []
+        return -1, [], [], [], [], [], []
 
 
     spline = CubicSpline(z_o, x_o)
@@ -41,7 +41,13 @@ def complete_trajectory(track, other, view):
     dx, dy, dz = 0., 0., 0.
 
     trajectory = []
-    dQds       = []
+
+    dQds_int       = []
+    dQds_max       = []
+    dQds_min       = []
+    dQds_pv        = []
+    ds             = []
+
     length     = 0.
 
     for i in range(len(track.path)):
@@ -74,26 +80,28 @@ def complete_trajectory(track, other, view):
             dr *= math.sqrt(1. + pow(a0, 2)*(1./pow(a1, 2) + 1.))
 
         length += dr
-        dQds.append(track.dQ[i]/dr)
+        dQds_int.append(track.dQ[i][0]/dr)
+        dQds_max.append(track.dQ[i][1]/dr)
+        dQds_min.append(track.dQ[i][2]/dr)
+        dQds_pv.append(track.dQ[i][3]/dr)
+        ds.append(dr)
 
         if(view == 0):
             trajectory.append( (x, y, z) )
         else:
             trajectory.append( (y, x, z) )
             
-    return length, trajectory, dQds
+    return length, trajectory, dQds_int, dQds_max, dQds_min, dQds_pv, ds
 
 
 def t0_corr_from_reco(trk, tol):
     """ TO DO : detector's boundary may change from one run to another with dead channels, to be updated """
 
 
-
     z_top = cf.Anode_Z
+    z_bot = 0.
     vdrift = lar.driftVelocity()/10. #in cm mus^-1
 
-    z_bot = z_top - cf.n_Sample*cf.n_Sampling*vdrift/10.
-    z_short = z_top - 120. #this is a huge approximation ; to be updated !
 
     delta_x = cf.len_det_x/2.
     delta_y = cf.len_det_y/2.
@@ -106,28 +114,12 @@ def t0_corr_from_reco(trk, tol):
     exit_wall = (delta_x - math.fabs(trk.end_x) < tol) or (delta_y - math.fabs(trk.end_y) < tol)
 
 
-    if(cf.n_CRPUsed == 2):
-        from_wall = from_wall or (math.fabs(trk.ini_y) < tol)
-        exit_wall = exit_wall or (math.fabs(trk.end_y) < tol)
 
-    else: #FOR DATA WITH CRP 3 ON
-        """ start point """
-        if(trk.ini_x < 0 or trk.ini_x > 100):
-            from_wall = from_wall or (math.fabs(trk.ini_y) < tol)
+    from_wall = from_wall or (math.fabs(trk.ini_y) < tol)
+    exit_wall = exit_wall or (math.fabs(trk.end_y) < tol)
 
-        else:
-            if(trk.ini_y < 0):
-                from_wall = from_wall or (math.fabs(-100. - trk.ini_y) < tol) or (math.fabs(100. - trk.ini_x) < tol) or (math.fabs(trk.ini_x) < tol)
-
-        """ end point """
-        if(trk.end_x < 0 or trk.end_x > 100):
-            exit_wall = exit_wall or (math.fabs(trk.end_y) < tol)
-
-        else:
-            if(trk.end_y < 0):
-                exit_wall = exit_wall or (math.fabs(-100. - trk.end_y) < tol) or (math.fabs(100. - trk.end_x) < tol) or (math.fabs(trk.end_x) < tol)
-
-
+    """ end point """    
+    exit_wall = exit_wall or (math.fabs(trk.end_y) < tol)
 
 
     zcorr = 9999.
@@ -140,7 +132,7 @@ def t0_corr_from_reco(trk, tol):
 
     #early track case
     if(from_top and not exit_wall):        
-        zcorr = (z_short - trk.end_z)
+        zcorr = (z_bot - trk.end_z)
         if(zcorr > 0.): zcorr *= -1.
         t0 = zcorr/vdrift
         trk.set_t0_z0_corr(t0, zcorr)
@@ -173,37 +165,36 @@ def find_tracks(ztol, qfrac, corr_d_tol):
             if(tj.matched >= 0):
                 continue
 
-            if( (ti.ini_crp == tj.ini_crp) and (ti.end_crp == tj.end_crp) ):
 
-                d_start = math.fabs( ti.path[0][1] - tj.path[0][1] )
-                d_stop  = math.fabs( ti.path[-1][1] - tj.path[-1][1] )
+            d_start = math.fabs( ti.path[0][1] - tj.path[0][1] )
+            d_stop  = math.fabs( ti.path[-1][1] - tj.path[-1][1] )
 
-                qv0 = ti.tot_charge
-                qv1 = tj.tot_charge
-                balance =  math.fabs(qv0 - qv1)/(qv0 + qv1)
+            #qv0 = ti.tot_charge
+            #qv1 = tj.tot_charge
+            #balance =  math.fabs(qv0 - qv1)/(qv0 + qv1)
 
-                if( d_start < ztol and d_stop < ztol and balance < qfrac):
-                    d = d_start + d_stop
-                    if(d < mindist):
-                        tbest = tj
-                        mindist = d
-                        match = True
+            if( d_start < ztol and d_stop < ztol):# and balance < qfrac):
+                d = d_start + d_stop
+                if(d < mindist):
+                    tbest = tj
+                    mindist = d
+                    match = True
 
         if(match == True):            
             track = dc.trk3D(ti, tbest)
             
-            l, t, q = complete_trajectory(ti, tbest, 0)
+            l, t, q_int, q_max, q_min, q_pv, ds = complete_trajectory(ti, tbest, 0)
             
             if(l < 0):
                 continue
-            track.set_view0(t, q)
+            track.set_view0(t, q_int, q_max, q_min, q_pv, ds)
 
 
-            l, t, q = complete_trajectory(tbest, ti, 1)
+            l, t, q_int, q_max, q_min, q_pv, ds = complete_trajectory(tbest, ti, 1)
             
             if(l < 0):
                 continue
-            track.set_view1(t, q)
+            track.set_view1(t, q_int, q_max, q_min, q_pv, ds)
 
             track.matched(ti, tbest)
             track.angles(ti,tbest)

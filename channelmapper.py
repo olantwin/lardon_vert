@@ -1,15 +1,15 @@
 import config as cf
 import data_containers as dc
 
-n_Crates = 12
-n_CardPerCrate = 10
-n_ChPerCard = 64
-n_ChPerCrate = n_CardPerCrate * n_ChPerCard 
 n_ChPerConnector = 8
-HalfCrate = int(n_Crates/2)
-QuartCrate = int(HalfCrate/2)
-HalfCard = int(n_CardPerCrate/2)
-HalfChPerCrate = int(n_ChPerCrate/2)
+
+mapper = [65, 66, 67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,
+          85,86,87,88,89,90,91,92,93,94,95,96,113,114,115,116,117,118,119,
+          120,121,122,123,124,125,126,127,128,97,98,99,100,101,102,103,
+          104,105,106,107,108,109,110,111,112,16,15,14,13,12,11,10,9,8,
+          7,6,5,4,3,2,1,32,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,
+          64,63,62,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,
+          43,42,41,40,39,38,37,36,35,34,33]
 
 
 def check():
@@ -19,52 +19,21 @@ def check():
 def ChannelMapper():    
     check()
     for idaq in range(cf.n_ChanTot):
-        crp, view, vchan = DAQToCRP(idaq)
-        dc.map_ped.append(dc.pdmap(crp,view,vchan))
-        """
-        ev = cf.pdmap()
-        ev.view = view
-        ev.crp = crp
-        ev.vchan = vchan
-        cf.map_ped.append(ev)
-        """
+        view, vchan = DAQToAna(idaq)
+        dc.map_ped.append(dc.pdmap(view,vchan))
 
-def DAQToCRP(daqch):
-    
-    crate = int(daqch/n_ChPerCrate)
-    card  = int((daqch - crate * n_ChPerCrate)/n_ChPerCard)
-    chcard = int(daqch - crate * n_ChPerCrate - card * n_ChPerCard)
-    conn   = int(chcard/n_ChPerConnector)
-    view = 0 if crate < HalfCrate else 1
 
-    crp  = -1
-    
-    if(view==0):
-        if(crate < QuartCrate):
-            if(card < HalfCard):
-                crp = 1
-            else:
-                crp = 2
-        else:
-            if(card < HalfCard):
-                crp = 0
-            else:
-                crp = 3
+def DAQToAna(daqch):
+    conn = int(daqch/n_ChPerConnector)
+    ch_femb = 7 - (daqch-conn*n_ChPerConnector) + conn*n_ChPerConnector
+
+    ch_global = mapper[ch_femb] - 1
+
+    if(ch_global >= 64):
+        chan = ch_global - 64
+        view = 1
     else:
-        if((crate-HalfCrate) < QuartCrate):
-            if(card < HalfCard):
-                crp = 0
-            else:
-                crp = 1
-        else:
-            if(card < HalfCard):
-                crp = 3
-            else:
-                crp = 2
-            
-    vchan = -1
-    if(view==0):
-        vchan = abs(chcard-conn*n_ChPerConnector - 7) + conn*n_ChPerConnector + (crate%QuartCrate)*HalfChPerCrate + (card if card < HalfCard else card-HalfCard)*n_ChPerCard
-    else:
-        vchan = abs(chcard-conn*n_ChPerConnector - 7) + conn*n_ChPerConnector + abs((crate%QuartCrate)-2)*HalfChPerCrate + abs((card if card < HalfCard else card-HalfCard)-4)*n_ChPerCard
-    return int(crp), int(view), int(vchan)
+        chan = ch_global
+        view = 0
+
+    return view, chan

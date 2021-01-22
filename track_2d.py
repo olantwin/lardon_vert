@@ -31,12 +31,6 @@ def fit_slopes(n, t):
 
     slope_err = see * np.sqrt( 1./sx2) if sx2 != 0 else 0.
 
-    """
-    print("initial : ")
-    print("was %.3f +/ %.3f"%(t.ini_slope, t.ini_slope_err))
-    print("now %.3f +/ %.3f"%(slope, slope_err))
-    """
-
     t.ini_slope = slope
     t.ini_slope_err = slope_err
 
@@ -48,11 +42,7 @@ def fit_slopes(n, t):
     sx2 = ((pts[:,0]-mx)**2).sum()
     slope_err = see * np.sqrt( 1./sx2) if sx2 != 0 else 0.
 
-    """
-    print("ending : ")
-    print("was %.3f +/ %.3f"%(t.end_slope, t.end_slope_err))
-    print("now %.3f +/ %.3f"%(slope, slope_err))
-    """
+
     t.end_slope = slope
     t.end_slope_err = slope_err
 
@@ -62,7 +52,6 @@ def dump_track(idx):
     t = dc.tracks2D_list[idx]
 
     print("Track ", idx)
-    print("CRP : ", t.ini_crp, " to ", t.end_crp)
     print("VIEW : ", t.view)
     print("NB of hits attached ", t.nHits)
     print("X : ", t.path[0][0], " to ", t.path[0][1])
@@ -80,177 +69,167 @@ def find_tracks(min_hits, rcut, chicut, y_err, slope_err, pbeta, matchID):
     """track ID starts at 1 """
     trackID = len(dc.tracks2D_list)+1
 
-    for icrp in range(cf.n_CRPUsed):
-        for iview in range(cf.n_View):
-            for icl in range(dc.evt_list[-1].nClusters[icrp,iview]):
-                hits = [x for x in dc.hits_list if x.crp==icrp and x.view==iview and x.matched == -9999 and x.cluster==icl]
+    for iview in range(cf.n_View):
+        for icl in range(dc.evt_list[-1].nClusters[iview]):
+            hits = [x for x in dc.hits_list if x.view==iview and x.matched == -9999 and x.cluster==icl]
                 
-                """sort by decreasing Z and increasing channel """
-                hits.sort()
+            """sort by decreasing Z and increasing channel """
+            hits.sort()
 
-                nHits = len(hits)
-                if(nHits < min_hits):
+            nHits = len(hits)
+            if(nHits < min_hits):
+                continue
+            visited = np.zeros((nHits),dtype=bool)
+            X = np.asarray([[x.X,x.Z] for x in hits])                
+
+            """build the NN Tree"""
+            tree = spatial.cKDTree(X)
+
+            seeded = False
+                
+            while(np.sum(visited) < nHits):
+                    
+                idx_list = []
+
+                """get the first not yet visited hit in the list"""
+                idx = np.argmax(visited==0)
+                idx_list.append(idx)
+
+                """ in case everything has already been visited """
+                if(idx == 0 and visited[idx] is True):
+                    break
+                    
+                visited[idx] = True
+                    
+                    
+                """gets NN indices within rcut, 
+                first nearest point is itself"""
+                nn = tree.query_ball_point(X[idx], rcut, return_sorted=True)#[1:]
+                
+                nn = [k for k in nn if (k != idx) and (visited[k] == 0)]
+                        
+                """give up if still nothing"""
+                if(len(nn)==0):
+                    seeded = False
                     continue
-                visited = np.zeros((nHits),dtype=bool)
-                X = np.asarray([[x.X,x.Z] for x in hits])                
 
-                """build the NN Tree"""
-                tree = spatial.cKDTree(X)
+                """start the filter"""
+                if(seeded is False):
+                    nn_idx = nn[0]#np.argmax(visited[nn]==0)]
 
-                seeded = False
-                
-                while(np.sum(visited) < nHits):
-                    
-                    idx_list = []
-
-                    """get the first not yet visited hit in the list"""
-                    idx = np.argmax(visited==0)
-                    idx_list.append(idx)
-
-                    """ in case everything has already been visited """
-                    if(idx == 0 and visited[idx] is True):
-                        break
-                    
-                    visited[idx] = True
-                    
-                    
-                    """gets NN indices within rcut, 
-                    first nearest point is itself"""
-                    nn = tree.query_ball_point(X[idx], rcut, return_sorted=True)#[1:]
-                    #print(" seeding with ", idx)
-                    nn = [k for k in nn if (k != idx) and (visited[k] == 0)]
-                    #print(nn)
-
-
-                    """double rcut in case nothing found on first trial"""
-                    #if(len(nn)==0):
-                        #nn = tree.query_ball_point(X[idx], 2.*rcut, return_sorted=True)#[1:]
- 
-
-                    #nn = [k for k in nn if (k != idx) and (visited[k] == 0)]
-                   
-                    """give up if still nothing"""
-                    if(len(nn)==0):
+                    x0, x1 = hits[idx].Z, hits[nn_idx].Z
+                    y0, y1 = hits[idx].X, hits[nn_idx].X
+                        
+                    if(x1 == x0):
                         seeded = False
                         continue
 
-                    """start the filter"""
-                    if(seeded is False):
-                        nn_idx = nn[0]#np.argmax(visited[nn]==0)]
+                    slope = (y1-y0)/(x1-x0)
+                    intercept = y1 - slope * x1
 
-                        x0, x1 = hits[idx].Z, hits[nn_idx].Z
-                        y0, y1 = hits[idx].X, hits[nn_idx].X
+                    ystart = slope * x0 + intercept
                         
-                        if(x1 == x0):
-                            seeded = False
-                            continue
-
-                        slope = (y1-y0)/(x1-x0)
-                        intercept = y1 - slope * x1
-
-                        ystart = slope * x0 + intercept
+                    filt.initiate(ystart, slope)
+                    track = dc.trk2D(trackID, iview, slope, slope_err, y0, x0, hits[idx].get_charges(), filt.getChi2(), icl)
+                    track.add_hit_update(slope, filt.getSlopeErr(), y1, x1, hits[nn_idx].get_charges(), filt.getChi2())
+                    idx_list.append(nn_idx)
                         
-                        filt.initiate(ystart, slope)
-                        track = dc.trk2D(trackID, icrp,iview,slope, slope_err, y0, x0, hits[idx].charge, filt.getChi2(), icl)
-                        track.add_hit_update(slope, filt.getSlopeErr(), y1, x1, hits[nn_idx].charge, filt.getChi2())
-                        idx_list.append(nn_idx)
-                        
-                        seeded = True
-                        visited[nn_idx] = True
+                    seeded = True
+                    visited[nn_idx] = True
 
-                    """update the track from nearby hits"""                   
-                    finished = False
+                """update the track from nearby hits"""                   
+                finished = False
                     
-                    while(seeded is True and finished is False and np.sum(visited) < nHits):
-                        idx = nn_idx
-                        x0, y0 = x1, y1
-                        nn = tree.query_ball_point(X[idx], rcut, return_sorted=True)#[1:]
-                        nn = [k for k in nn if (k != idx) and (visited[k] == 0)]                        
+                while(seeded is True and finished is False and np.sum(visited) < nHits):
+                    idx = nn_idx
+                    x0, y0 = x1, y1
+                    nn = tree.query_ball_point(X[idx], rcut, return_sorted=True)#[1:]
+                    nn = [k for k in nn if (k != idx) and (visited[k] == 0)]                        
 
 
-                        if(len(nn)==0):
-                            finished = True
-                            seeded = False
-                            if(track.nHits >= min_hits):
-                                dc.tracks2D_list.append(track)
-                                [hits[i].set_match(trackID) for i in idx_list]
-                                refilter_and_find_drays(trackID,
-                                                        y_err, slope_err, pbeta)
-                                dc.evt_list[-1].nTracks2D[iview] += 1
-                                trackID += 1
+                    if(len(nn)==0):
+                        finished = True
+                        seeded = False
+                        if(track.nHits >= min_hits):
+                            dc.tracks2D_list.append(track)
+                            [hits[i].set_match(trackID) for i in idx_list]
+                            refilter_and_find_drays(trackID,
+                                                    y_err, slope_err, pbeta)
+                            dc.evt_list[-1].nTracks2D[iview] += 1
+                            trackID += 1
 
-                            continue
+                        continue
 
-                        if(np.sum(visited[nn]) == len(nn)):
-                            finished=True
-                            seeded=False
-                            if(track.nHits >= min_hits):
-                                dc.tracks2D_list.append(track)
-                                [hits[i].set_match(trackID) for i in idx_list]
-                                refilter_and_find_drays(trackID,
-                                                        y_err, slope_err, pbeta)
-                                dc.evt_list[-1].nTracks2D[iview] += 1
-                                trackID += 1
-                            continue
+                    if(np.sum(visited[nn]) == len(nn)):
+                        finished=True
+                        seeded=False
+                        if(track.nHits >= min_hits):
+                            dc.tracks2D_list.append(track)
+                            [hits[i].set_match(trackID) for i in idx_list]
+                            refilter_and_find_drays(trackID,
+                                                    y_err, slope_err, pbeta)
+                            dc.evt_list[-1].nTracks2D[iview] += 1
+                            trackID += 1
+                        continue
                             
                         
-                        updated = False
+                    updated = False
 
-                        ok_idx = []
-                        best_idx = -1
-                        best_chi2 = 99999.
+                    ok_idx = []
+                    best_idx = -1
+                    best_chi2 = 99999.
                         
-                        for j in nn: 
-                            nn_idx = j
+                    for j in nn: 
+                        nn_idx = j
                             
-                            x1, y1 = hits[nn_idx].Z, hits[nn_idx].X
+                        x1, y1 = hits[nn_idx].Z, hits[nn_idx].X
 
-                            if(x1 >= x0):
-                                continue
+                        if(x1 >= x0):
+                            continue
                         
-                            yp = filt.predict(x1-x0)
-                            chi2m = filt.computeChi2(y1, x1-x0)
+                        yp = filt.predict(x1-x0)
+                        chi2m = filt.computeChi2(y1, x1-x0)
     
-                            if(chi2m < chicut):
-                                ok_idx.append(nn_idx)
+                        if(chi2m < chicut):
+                            ok_idx.append(nn_idx)
                                 
-                                if(chi2m < best_chi2):
-                                    best_idx = nn_idx
-                                    best_chi2 = chi2m
+                            if(chi2m < best_chi2):
+                                best_idx = nn_idx
+                                best_chi2 = chi2m
 
-                        if(len(ok_idx) > 0):
-                            for j in ok_idx:
-                                nn_idx = j
-                                x1, y1 = hits[nn_idx].Z, hits[nn_idx].X
-                                idx_list.append(nn_idx)
+                    if(len(ok_idx) > 0):
+                        for j in ok_idx:
+                            nn_idx = j
+                            x1, y1 = hits[nn_idx].Z, hits[nn_idx].X
+                            idx_list.append(nn_idx)
                                 
-                                if(j != best_idx):
-                                    track.add_hit(y1, x1, hits[nn_idx].charge)
-                                else:
-                                    chi2_up = filt.update(y1, x1-x0)
-                                    tot_chi2 = filt.getChi2()
-                                    track.add_hit_update(filt.getSlope(), filt.getSlopeErr(), y1, x1, hits[nn_idx].charge, tot_chi2)
-                                visited[nn_idx]=True
-                                updated = True
+                            if(j != best_idx):
+                                track.add_hit(y1, x1, hits[nn_idx].get_charges())
+                            else:
+                                chi2_up = filt.update(y1, x1-x0)
+                                tot_chi2 = filt.getChi2()
+                                track.add_hit_update(filt.getSlope(), filt.getSlopeErr(), y1, x1, hits[nn_idx].get_charges(), tot_chi2)
+                            visited[nn_idx]=True
+                            updated = True
 
-                                if(j==best_idx):
-                                    break
+                            if(j==best_idx):
+                                break
 
-                        if(updated is False or np.sum(visited) == nHits):
-                            finished = True
-                            seeded = False
-                            if(track.nHits >=  min_hits):
+                    if(updated is False or np.sum(visited) == nHits):
+                        finished = True
+                        seeded = False
+                        if(track.nHits >=  min_hits):
                                 
-                                dc.tracks2D_list.append(track)
-                                [hits[i].set_match(trackID) for i in idx_list]
-                                refilter_and_find_drays(trackID,
-                                                        y_err, slope_err, pbeta)
+                            dc.tracks2D_list.append(track)
+                            [hits[i].set_match(trackID) for i in idx_list]
+                            refilter_and_find_drays(trackID,
+                                                    y_err, slope_err, pbeta)
 
-                                dc.evt_list[-1].nTracks2D[iview] += 1
-                                trackID += 1
-                            continue
+                            dc.evt_list[-1].nTracks2D[iview] += 1
+                            trackID += 1
+                        continue
 
-    print("nb of 2D tracks ", len(dc.tracks2D_list))
+    #print("nb of 2D tracks ", len(dc.tracks2D_list))
     return
     
 
@@ -278,7 +257,7 @@ def refilter_and_find_drays(idtrk, y_err, slope_err, pbeta):
 
     """ sort by decreasing z and increasing x """
     coord = [(x.X, x.Z) for x in hits]
-    charge = [x.charge for x in hits]    
+    charge = [x.get_charges() for x in hits]    
 
     track.reset_path(coord, charge)
     
@@ -393,7 +372,7 @@ def refilter_and_find_drays(idtrk, y_err, slope_err, pbeta):
 
     for l in drays:
         h = hits[l]
-        track.add_drays(h.X, h.Z, h.charge)
+        track.add_drays(h.X, h.Z, h.get_charges())
         h.set_match(-1*h.matched)
     
     track.finalize_track()
