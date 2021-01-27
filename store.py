@@ -31,6 +31,39 @@ class Pedestal(IsDescription):
     filt_rms  = Float16Col()
 
 
+class AllPedestal(IsDescription):
+    mean_v0   = Float16Col(shape=(cf.n_ChanPerView))
+    rms_v0    = Float16Col(shape=(cf.n_ChanPerView))
+    mean_v1   = Float16Col(shape=(cf.n_ChanPerView))
+    rms_v1    = Float16Col(shape=(cf.n_ChanPerView))
+
+class SingleHits(IsDescription):
+    channel_v0 = UInt16Col()
+    channel_v1 = UInt16Col()
+
+    tdc_max_v0 = UInt16Col()
+    tdc_max_v1 = UInt16Col()
+    tdc_min_v0 = UInt16Col()
+    tdc_min_v1 = UInt16Col()
+
+    x          = Float16Col()
+    y          = Float16Col()
+    z          = Float16Col()
+
+    adc_max_v0 = Float16Col()
+    adc_max_v1 = Float16Col()
+    adc_min_v0 = Float16Col()
+    adc_min_v1 = Float16Col()
+    
+    charge_int_v0 = Float16Col()
+    charge_int_v1 = Float16Col()
+    charge_max_v0 = Float16Col()
+    charge_max_v1 = Float16Col()
+    charge_min_v0 = Float16Col()
+    charge_min_v1 = Float16Col()
+    charge_pv_v0  = Float16Col()
+    charge_pv_v1  = Float16Col()
+
 class Hits(IsDescription):
     view    = UInt8Col()
     channel = UInt16Col()
@@ -49,6 +82,8 @@ class Hits(IsDescription):
     charge_pv  = Float16Col()
     cluster = Int16Col()
 
+    ped_bef  = Float16Col()
+    ped_aft  = Float16Col()
 
 class Tracks2D(IsDescription):
     view    = UInt8Col()
@@ -130,6 +165,78 @@ def store_event(h5file, group):
     evt.append()
     table.flush()
 
+def create_all_pedestals(h5file):
+    table = h5file.create_table("/", 'AllPedestal', AllPedestal, 'all pedestals')
+
+def store_all_pedestals(h5file):
+    table = h5file.root.AllPedestal
+    ped = table.row
+
+    pedv0 = np.zeros(cf.n_ChanPerView)
+    pedv1 = np.zeros(cf.n_ChanPerView)
+    rmsv0 = np.zeros(cf.n_ChanPerView)
+    rmsv1 = np.zeros(cf.n_ChanPerView)
+    for x in dc.map_ped:
+        v, ch = x.get_ana_chan()
+        if(v==0):
+            pedv0[ch] = x.raw_ped
+            rmsv0[ch] = x.raw_rms
+        else:
+            pedv1[ch] = x.raw_ped
+            rmsv1[ch] = x.raw_rms
+
+
+    ped['mean_v0'] = pedv0
+    ped['rms_v0']  = rmsv0
+    ped['mean_v1'] = pedv1
+    ped['rms_v1']  = rmsv1
+    ped.append()
+    table.flush()
+    
+
+
+def create_single_hits(h5file):
+    table = h5file.create_table("/", 'SingleHits', SingleHits, 'single hits')
+
+def store_single_hits(h5file, i, j):
+    table = h5file.root.SingleHits
+
+    hit = table.row
+    hv0 = dc.hits_list[i]
+    hv1 = dc.hits_list[j]
+
+        
+    hit['channel_v0'] = hv0.channel
+    hit['channel_v1'] = hv1.channel
+    hit['tdc_max_v0'] = hv0.max_t
+    hit['tdc_max_v1'] = hv1.max_t
+    hit['tdc_min_v0'] = hv0.min_t
+    hit['tdc_min_v1'] = hv1.min_t
+
+    hit['x']       = hv0.X
+    hit['y']       = hv1.X
+    hit['z']       = 0.5*(hv0.Z + hv1.Z)
+
+    hit['adc_max_v0'] = hv0.max_adc
+    hit['adc_min_v0'] = hv0.min_adc
+    hit['adc_max_v1'] = hv1.max_adc
+    hit['adc_min_v1'] = hv1.min_adc
+        
+    hit['charge_int_v0']  = hv0.charge_int
+    hit['charge_max_v0']  = hv0.charge_max
+    hit['charge_min_v0']  = hv0.charge_min
+    hit['charge_pv_v0']   = hv0.charge_pv
+
+    hit['charge_int_v1']  = hv1.charge_int
+    hit['charge_max_v1']  = hv1.charge_max
+    hit['charge_min_v1']  = hv1.charge_min
+    hit['charge_pv_v1']   = hv1.charge_pv
+
+
+    hit.append()
+    table.flush()
+    
+
 
 def store_pedestal(h5file, group):
     table = h5file.create_table(group, 'pedestals', Pedestal, 'Pedestals')
@@ -169,6 +276,10 @@ def store_hits(h5file, group):
         hit['charge_pv']   = h.charge_pv
 
         hit['cluster'] = h.cluster
+
+        hit['ped_bef'] = h.ped_bef
+        hit['ped_aft'] = h.ped_aft
+        
         hit.append()
     table.flush()
 

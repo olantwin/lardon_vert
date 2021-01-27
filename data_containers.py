@@ -124,6 +124,8 @@ class hits:
         self.Z       = -1
         self.matched = -9999
         
+        self.ped_bef = -1
+        self.ped_aft = -1
 
     def __lt__(self,other):
         #"""sort hits by increasing channel and increasing Z"""
@@ -152,8 +154,20 @@ class hits:
     def set_cluster(self, ID):
         self.cluster = ID
 
+    def set_ped(self, bef, aft):
+        self.ped_bef = bef
+        self.ped_aft = aft
+        
     def get_charges(self):
         return (self.charge_int, self.charge_max, self.charge_min, self.charge_pv)
+
+
+    def dump(self):
+        print("\n**View ", self.view, " Channel ", self.channel)
+        print("**from t ", self.start, " to ", self.stop, " dt = ", self.stop-self.start)
+        print("**tmax ", self.max_t, " tmin ", self.min_t)
+        print("**adc max ", self.max_adc, " adc min ", self.min_adc)
+        print("**charges ", self.charge_int, " ", self.charge_max, " ", self.charge_min, " ", self.charge_pv)
 
 class trk2D:
     def __init__(self, ID, view, ini_slope, ini_slope_err, x0, y0, q0, chi2, cluster):

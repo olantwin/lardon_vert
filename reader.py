@@ -19,7 +19,8 @@ import clustering as clus
 import track_2d as trk2d
 import track_3d as trk3d
 import store as store
-import read_mc as mc
+#import read_mc as mc
+import argon39 as ar
 
 import plotting as plot
 
@@ -116,7 +117,7 @@ else:
 
 
 if(outname_option):
-    outname = outname_option + "_" + outname_option
+    outname = outname + "_" + outname_option
         
     
 name_out = cf.store_path + "/" +  outname + ".h5"
@@ -124,7 +125,13 @@ print(name_out)
 
 output = tables.open_file(name_out, mode="w", title="Reconstruction Output")
 
+name_out_sh = cf.store_path + "/" +  outname + "_singlehits.h5"
+output_sh = tables.open_file(name_out_sh, mode="w", title="Reconstruction Output")
+store.create_single_hits(output_sh)
 
+name_out_ped = cf.store_path + "/" +  outname + "_pedestals.h5"
+output_ped = tables.open_file(name_out_ped, mode="w", title="Pedestals")
+store.create_all_pedestals(output_ped)
 
 """ Build DAQ Channel <-> Analysis Channel correspondance """
 cmap.ChannelMapper()
@@ -177,7 +184,7 @@ for fbin in data_list:
 
 
     for ievent in range(nevent):
-        #if(ievent < 20): continue
+        #if(ievent < 16): continue
         ievent_tot += 1
         if(ntotevent > 0 and ievent_tot >= ntotevent):
             #print("bye bye")
@@ -208,7 +215,8 @@ for fbin in data_list:
     
         #plot.plot_wvf_multi_current([(0,8),(0,22),(0,45),(1,8),(1,22),(1,45)], option="raw", to_be_shown=True)
     
-        #plot.plot_ed_data(option="raw", to_be_shown=False)
+        #plot.plot_ed_data(option="rawpres", to_be_shown=False)
+        #plot.plot_ed_data(option="rawzoompres", to_be_shown=False, adc_min=-10, adc_max=10)
         #plot.plot_event_ped_and_rms(option='initial', to_be_shown=True)
             
         """ this seems completely useless for the 50L data """
@@ -248,16 +256,35 @@ for fbin in data_list:
 
         """ store final estimate of pedestal mean and rms """
         ped.store_final_ped_rms()
+        #plot.plot_ed_data(option="filtpres", to_be_shown=False, adc_min=-10, adc_max=10)
 
-
-        """ parameters : pad left (n ticks) pad right (n ticks), min dt, thr1, thr2 """
-        hf.hit_finder(5, 10, 10, 3., 6., 1.5)
+        """ parameters : pad left (n ticks) pad right (n ticks), min dt, thr1 (collection), thr2(overlap collection), thr3 (induction) """
+        hf.hit_finder(5, 10, 6, 3., 6., 2.)
         
         if(verbose):
             print(" found ", dc.evt_list[-1].nHits[0], " and ", dc.evt_list[-1].nHits[1], " hits")
 
+        if(dc.evt_list[-1].nHits[0] > 0 and dc.evt_list[-1].nHits[0] < 4 and dc.evt_list[-1].nHits[1] > 0 and dc.evt_list[-1].nHits[1] < 4):
+            matched_hits = ar.argon_39_finder(5)
+            if(len(matched_hits)>0):
+                """
+                for h in dc.hits_list:
+                    h.dump()
+                """
+                for i, j in matched_hits:
+                    store.store_single_hits(output_sh, i, j)
+                    #print("---->>> ", i, " ", j)
+                #plot.plot_ed_data_and_hits(option="ar39test", to_be_shown=True, adc_min=-10, adc_max=10)
+            #store.store_single_hits(output_sh)
+        """
+        if(dc.evt_list[-1].nHits[0] > 0 and dc.evt_list[-1].nHits[0] < 4 and dc.evt_list[-1].nHits[1] > 0 and dc.evt_list[-1].nHits[1] < 4):
+            for h in dc.hits_list:
+                h.dump()
+            plot.plot_ed_data_and_hits(option="ar39test", to_be_shown=True, adc_min=-10, adc_max=10)
+        """
 
         if(np.sum(dc.evt_list[-1].nHits) == 0):
+            store.store_all_pedestals(output_ped)
             continue
         #plot.plot_2dview_hits(option="test", to_be_shown=False)
     
@@ -297,6 +324,7 @@ for fbin in data_list:
             print(" Found ", dc.evt_list[-1].nTracks3D, " 3D Tracks ")
 
         if(dc.evt_list[-1].nTracks3D > 0):
+            #plot.plot_ed_data_and_hits(option="3D", to_be_shown=True, adc_min=-10, adc_max=10)
             #plot.plot_3d("test", False)
             if(verbose):
                 [x.dump() for x in dc.tracks3D_list]
@@ -319,6 +347,8 @@ for fbin in data_list:
     data.close()
 store.store_infos(output, day, run, ievent_tot, nevent_mu, time.time())
 output.close()
+output_sh.close()
+output_ped.close()
 tottime = time.time() - tstart
 print(" Has reconstructed ", nevent_mu, " events with at-least one 3D track out of ", ievent_tot, " events")
 print(" TOTAL RUNNING TIME %.3f s == %.3f s/evt"% (tottime, tottime/ievent_tot))
