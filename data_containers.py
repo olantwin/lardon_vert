@@ -81,7 +81,8 @@ class event:
         self.nClusters  = np.zeros((cf.n_View), dtype=int)
         self.nTracks2D  = np.zeros((cf.n_View), dtype=int)
         self.nTracks3D  = 0
-        
+        self.nSingleHits = 0
+
     def __eq__(self, other):
         return (self.date, self.evt_nb, self.time_s, self.time_ns) == (other.date, other.evt_nb, other.time_s, other.time_ns)
 
@@ -118,12 +119,15 @@ class hits:
         self.charge_max  = 0.
         self.charge_min  = 0.
         self.charge_pv   = 0. #peak-valley
+        self.charge_sh   = 0.
 
         self.cluster = -1 #cluster
         self.X       = -1
         self.Z       = -1
         self.matched = -9999
         
+        self.ped_bef = -1
+        self.ped_aft = -1
 
     def __lt__(self,other):
         #"""sort hits by increasing channel and increasing Z"""
@@ -140,11 +144,24 @@ class hits:
             self.Z = cf.Anode_Z - self.min_t*cf.n_Sampling*v*0.1
 
     def hit_charge(self):
-        self.charge_int *= cf.n_Sampling / cf.ADCtofC
+        """
+        self.charge_int *= cf.n_Sampling / cf.ADCperfC
 
-        self.charge_max = (self.max_adc) * cf.n_Sampling / cf.ADCtofC
-        self.charge_min = (self.min_adc) * cf.n_Sampling / cf.ADCtofC
-        self.charge_pv  = (self.max_adc - self.min_adc) * cf.n_Sampling / cf.ADCtofC
+        self.charge_max = (self.max_adc) * cf.n_Sampling / cf.ADCperfC
+        self.charge_min = (self.min_adc) * cf.n_Sampling / cf.ADCperfC
+        self.charge_pv  = (self.max_adc - self.min_adc) * cf.n_Sampling / cf.ADCperfC
+        """
+
+        self.charge_int /= (cf.ADCperfC*cf.AreaCorr)
+
+        self.charge_max = (self.max_adc) / cf.ADCperfC
+        self.charge_min = (self.min_adc) / cf.ADCperfC
+        self.charge_pv  = (self.max_adc - self.min_adc) / cf.ADCperfC
+
+
+    def set_charge_singlehit(self, charge):
+        self.charge_sh = charge
+        self.charge_sh /= (cf.ADCperfC*cf.AreaCorr)
 
     def set_match(self, ID):
         self.matched = ID
@@ -152,8 +169,20 @@ class hits:
     def set_cluster(self, ID):
         self.cluster = ID
 
+    def set_ped(self, bef, aft):
+        self.ped_bef = bef
+        self.ped_aft = aft
+        
     def get_charges(self):
         return (self.charge_int, self.charge_max, self.charge_min, self.charge_pv)
+
+
+    def dump(self):
+        print("\n**View ", self.view, " Channel ", self.channel)
+        print("**from t ", self.start, " to ", self.stop, " dt = ", self.stop-self.start)
+        print("**tmax ", self.max_t, " tmin ", self.min_t)
+        print("**adc max ", self.max_adc, " adc min ", self.min_adc)
+        print("**charges ", self.charge_int, " ", self.charge_max, " ", self.charge_min, " ", self.charge_pv)
 
 class trk2D:
     def __init__(self, ID, view, ini_slope, ini_slope_err, x0, y0, q0, chi2, cluster):

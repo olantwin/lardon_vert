@@ -181,6 +181,25 @@ def recompute_hit_charge(hit):
 
     hit.charge_int = val
 
+def get_pedestal_nearby(hit):
+    window = 50 #tdc
+    view, ch, start, stop = hit.view, hit.channel, hit.start-1, hit.stop+1
+
+    win_start = start - window
+    if(win_start < 0): win_start = 0
+    if(start-win_start < 15): 
+        ped_bef = -9999
+    else:
+        ped_bef = np.mean(dc.data[view, ch, win_start:start+1])
+
+    win_stop = stop + window
+    if(win_stop >= cf.n_Sample): win_stop = cf.n_Sample-1
+    if(win_stop-stop < 15): 
+        ped_aft = -9999
+    else:
+        ped_aft = np.mean(dc.data[view, ch, stop:win_stop+1])
+
+    hit.set_ped(ped_bef, ped_aft)
 
 def hit_finder(pad_left, pad_right, dt_min, n_sig_coll_1, n_sig_coll_2, n_sig_ind): 
     
@@ -222,17 +241,20 @@ def hit_finder(pad_left, pad_right, dt_min, n_sig_coll_1, n_sig_coll_2, n_sig_in
             tdc_start = start[2][g]
             tdc_stop = end[2][g]            
             
-            """ For the induction view, merge the pos & neg ROI together """
+            """ For the induction view, merge the pos & neg ROI together if they are separated """
             if(view==1 and g < len(gpe)-1):
                 merge = False
                 if(np.mean(dc.data[view, channel, tdc_start:tdc_stop+1]) > 0.):
                     if(start[0][g+1] == view and start[1][g+1] == channel):
                         if(np.mean(dc.data[view, channel, start[2][g+1]:end[2][g+1]]) < 0.):
-                            if(start[2][g+1] - tdc_stop < 5):
+
+                            if(start[2][g+1] - tdc_stop < 10):
                                 tdc_stop = end[2][g+1]
                                 merge=True
                 if(merge==False):
-                    continue
+                    if(tdc_stop-tdc_start < 20):
+                        continue
+                    #continue
 
 
 
@@ -313,4 +335,6 @@ def hit_finder(pad_left, pad_right, dt_min, n_sig_coll_1, n_sig_coll_2, n_sig_in
 
     """ compute hit charge in fC """
     [recompute_hit_charge(x) for x in dc.hits_list]
+    [get_pedestal_nearby(x) for x in dc.hits_list]
     [x.hit_charge() for x in dc.hits_list]
+

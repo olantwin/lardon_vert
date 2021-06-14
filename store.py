@@ -10,6 +10,7 @@ class Infos(IsDescription):
     #time_ms      = UInt8Col()
     nEventTot     = UInt32Col()
     nEventMu      = UInt32Col()
+    nEventSH      = UInt32Col()
     process_date = UInt32Col()
 
 class Event(IsDescription):
@@ -21,14 +22,50 @@ class Event(IsDescription):
     nClusters     = UInt32Col(shape=(cf.n_View))
     nTracks2D     = UInt32Col(shape=(cf.n_View))
     nTracks3D     = UInt32Col()
+    nSingleHits   = UInt32Col()
+
 
 class Pedestal(IsDescription):
-    view      = UInt8Col()
-    channel   = UInt16Col()
-    raw_mean  = Float16Col()
-    raw_rms   = Float16Col()
-    filt_mean = Float16Col()
-    filt_rms  = Float16Col()
+    ini_mean_v0   = Float16Col(shape=(cf.n_ChanPerView))
+    ini_rms_v0    = Float16Col(shape=(cf.n_ChanPerView))
+    ini_mean_v1   = Float16Col(shape=(cf.n_ChanPerView))
+    ini_rms_v1    = Float16Col(shape=(cf.n_ChanPerView))
+
+    fin_mean_v0   = Float16Col(shape=(cf.n_ChanPerView))
+    fin_rms_v0    = Float16Col(shape=(cf.n_ChanPerView))
+    fin_mean_v1   = Float16Col(shape=(cf.n_ChanPerView))
+    fin_rms_v1    = Float16Col(shape=(cf.n_ChanPerView))
+
+
+class SingleHits(IsDescription):
+    channel_v0 = UInt16Col()
+    channel_v1 = UInt16Col()
+
+    tdc_max_v0 = UInt16Col()
+    tdc_max_v1 = UInt16Col()
+    tdc_min_v0 = UInt16Col()
+    tdc_min_v1 = UInt16Col()
+
+    x          = Float16Col()
+    y          = Float16Col()
+    z          = Float16Col()
+
+    adc_max_v0 = Float16Col()
+    adc_max_v1 = Float16Col()
+    adc_min_v0 = Float16Col()
+    adc_min_v1 = Float16Col()
+    
+    charge_int_v0 = Float16Col()
+    charge_int_v1 = Float16Col()
+    charge_max_v0 = Float16Col()
+    charge_max_v1 = Float16Col()
+    charge_min_v0 = Float16Col()
+    charge_min_v1 = Float16Col()
+    charge_pv_v0  = Float16Col()
+    charge_pv_v1  = Float16Col()
+
+    charge_all_v0 = Float16Col()
+    charge_all_v1 = Float16Col()
 
 
 class Hits(IsDescription):
@@ -48,6 +85,9 @@ class Hits(IsDescription):
     charge_min = Float16Col()
     charge_pv  = Float16Col()
     cluster = Int16Col()
+
+    ped_bef  = Float16Col()
+    ped_aft  = Float16Col()
 
 
 class Tracks2D(IsDescription):
@@ -95,30 +135,50 @@ class Tracks3D(IsDescription):
 
     z0_corr = Float16Col()
     t0_corr = Float16Col()
-    
-def new_event(h5file, event_nb):
-    return h5file.create_group("/", 'event_'+str(event_nb), 'Event '+str(event_nb))    
 
-def store_infos(h5file, date, run, nevtTot, nevtMu, time):
-    table = h5file.create_table("/", 'infos', Infos, 'Infos')
-    inf = table.row
+class FFT(IsDescription):
+    PS_v0 = Float16Col(shape=(64, 324))
+    PS_v1 = Float16Col(shape=(64, 324))
 
+
+def create_output(h5file):
+    h5file.create_table("/", 'infos', Infos, "General Reconstruction Informations")
+    h5file.create_table("/", 'events', Event, "Event Reconstruction Informations")
+    h5file.create_table("/", 'pedestals_fake', Pedestal, "Pedestals Empty Events")
+    h5file.create_table("/", 'pedestals_muon', Pedestal, "Pedestals Data Events")
+    h5file.create_table("/", 'hits', Hits, "Pedestals")
+
+    h5file.create_table("/", 'tracks2D', Tracks2D, "Tracks 2D")
+    h5file.create_vlarray("/", 'trk2D_v0', Float32Atom(shape=(6)), "2D Track V0 (x, z, qint, qmax, qmin, qpv)")  
+    h5file.create_vlarray("/", 'trk2D_v1', Float32Atom(shape=(6)), "2D Track V1 (x, z, qint, qmax, qmin, qpv)")  
+
+    h5file.create_table("/", 'tracks3D', Tracks3D, "Tracks 3D")
+    h5file.create_vlarray("/", 'trk3D_v0', Float32Atom(shape=(8)), "3D Track V0 (x, y, z, qint, qmax, qmin, qpv, ds)")  
+    h5file.create_vlarray("/", 'trk3D_v1', Float32Atom(shape=(8)), "3D Track V1 (x, y, z, qint, qmax, qmin, qpv, ds)")  
+
+    h5file.create_table("/", 'singleHits', SingleHits, "Single 3D Hits")
+    h5file.create_table("/", 'fft_fake', FFT, "FFT Empty Events")
+    h5file.create_table("/", 'fft_muon', FFT, "FFT Data Events")
+
+
+
+def store_infos(h5file, date, run, nevtTot, nevtMu, nevtSH, time):
+    inf = h5file.root.infos.row
     inf['date']    = date
     inf['run']     = run
     #inf['time_s']  = t_s
     #inf['time_ms'] = t_ms
     inf['nEventTot']  = nevtTot
     inf['nEventMu']   = nevtMu
+    inf['nEventSH']   = nevtSH
     inf['process_date'] = time
-
+    
     inf.append()
-    table.flush()
 
-def store_event(h5file, group):
-    table = h5file.create_table(group, 'event', Event, "Event")
+    
 
-    evt = table.row
-
+def store_event(h5file):
+    evt = h5file.root.events.row
     evt['evt_nb_global'] = dc.evt_list[-1].evt_nb_glob
     evt['evt_nb_local']  = dc.evt_list[-1].evt_nb
     evt['time_s']        = dc.evt_list[-1].time_s
@@ -127,30 +187,55 @@ def store_event(h5file, group):
     evt['nClusters']     = dc.evt_list[-1].nClusters
     evt['nTracks2D']     = dc.evt_list[-1].nTracks2D
     evt['nTracks3D']     = dc.evt_list[-1].nTracks3D
+    evt['nSingleHits']   = dc.evt_list[-1].nSingleHits
     evt.append()
-    table.flush()
 
+def store_pedestals_data(h5file):
+    ped = h5file.root.pedestals_muon.row
+    
+    ini_mean = np.zeros((cf.n_View, cf.n_ChanPerView))
+    ini_rms  = np.zeros((cf.n_View, cf.n_ChanPerView))
+    fin_mean = np.zeros((cf.n_View, cf.n_ChanPerView))
+    fin_rms  = np.zeros((cf.n_View, cf.n_ChanPerView))
 
-def store_pedestal(h5file, group):
-    table = h5file.create_table(group, 'pedestals', Pedestal, 'Pedestals')
-
-    ped = table.row
 
     for x in dc.map_ped:
-        ped['view']      = x.view
-        ped['channel']   = x.vchan
-        ped['raw_mean']  = x.raw_ped
-        ped['raw_rms']   = x.raw_rms
-        ped['filt_mean'] = x.evt_ped
-        ped['filt_rms']  = x.evt_rms
-        ped.append()
-    table.flush()
+        ini_mean[x.view, x.vchan] = x.raw_ped
+        ini_rms[x.view, x.vchan]  = x.raw_rms
+        fin_mean[x.view, x.vchan] = x.evt_ped
+        fin_mean[x.view, x.vchan] = x.evt_ped
 
 
-def store_hits(h5file, group):
-    table = h5file.create_table(group, 'hits', Hits, 'Hits')
+    ped['ini_mean_v0'] = ini_mean[0]
+    ped['ini_rms_v0']  = ini_rms[0]
+    ped['ini_mean_v1'] = ini_mean[1]
+    ped['ini_rms_v1']  = ini_rms[1]
 
-    hit = table.row
+    ped['fin_mean_v0'] = fin_mean[0]
+    ped['fin_rms_v0']  = fin_rms[0]
+    ped['fin_mean_v1'] = fin_mean[1]
+    ped['fin_rms_v1']  = fin_rms[1]
+
+    ped.append()
+
+def store_pedestals_fake(h5file, ini_mean, ini_rms, fin_mean, fin_rms):
+    ped = h5file.root.pedestals_fake.row
+    
+
+    ped['ini_mean_v0'] = ini_mean[0]
+    ped['ini_rms_v0']  = ini_rms[0]
+    ped['ini_mean_v1'] = ini_mean[1]
+    ped['ini_rms_v1']  = ini_rms[1]
+
+    ped['fin_mean_v0'] = fin_mean[0]
+    ped['fin_rms_v0']  = fin_rms[0]
+    ped['fin_mean_v1'] = fin_mean[1]
+    ped['fin_rms_v1']  = fin_rms[1]
+
+    ped.append()
+
+def store_hits(h5file):
+    hit = h5file.root.hits.row
     for h in dc.hits_list:
         hit['view']    = h.view
         hit['channel'] = h.channel
@@ -169,19 +254,18 @@ def store_hits(h5file, group):
         hit['charge_pv']   = h.charge_pv
 
         hit['cluster'] = h.cluster
+
+        hit['ped_bef'] = h.ped_bef
+        hit['ped_aft'] = h.ped_aft
+        
         hit.append()
-    table.flush()
 
 
-def store_tracks2D(h5file, group):    
-    table = h5file.create_table(group, 'tracks2D', Tracks2D, "Tracks 2D")       
 
-    t2d_hits_v0 = h5file.create_group(group, 'tracks2D_v0', 'Tracks 2D View0')
-    t2d_hits_v1 = h5file.create_group(group, 'tracks2D_v1', 'Tracks 2D View1')
-
-    t2d = table.row
-    i_v0 = 0
-    i_v1 = 0
+def store_tracks2D(h5file):
+    t2d = h5file.root.tracks2D.row
+    v0  = h5file.root.trk2D_v0
+    v1  = h5file.root.trk2D_v1
 
     for t in dc.tracks2D_list:
         t2d['view']      = t.view
@@ -206,26 +290,18 @@ def store_tracks2D(h5file, group):
 
         pts = [[p[0], p[1], q[0], q[1], q[2], q[3]] for p,q in zip(t.path,t.dQ)]
 
-        if(t.view==0):
-            h5file.create_array(t2d_hits_v0, 'track_%i'%(i_v0), np.asarray(pts), 'track hits')
-            i_v0 += 1
-        else:
-            h5file.create_array(t2d_hits_v1, 'track_%i'%(i_v1), np.asarray(pts), 'track hits')
-            i_v1 += 1
-
         t2d.append()
-    table.flush()
 
+        if(t.view==0):
+            v0.append(pts)
+        else:
+            v1.append(pts)
 
+def store_tracks3D(h5file):
+    t3d = h5file.root.tracks3D.row
+    v0  = h5file.root.trk3D_v0
+    v1  = h5file.root.trk3D_v1
 
-def store_tracks3D(h5file, group):
-    table = h5file.create_table(group, 'tracks3D', Tracks3D, "Tracks 3D")       
-
-    t3d_hits_v0 = h5file.create_group(group, 'tracks3D_v0', 'Tracks 3D View0')
-    t3d_hits_v1 = h5file.create_group(group, 'tracks3D_v1', 'Tracks 3D View1')
-
-    t3d = table.row
-    i = 0
 
     for t in dc.tracks3D_list:
         t3d['x_ini']     = t.ini_x
@@ -257,10 +333,59 @@ def store_tracks3D(h5file, group):
         pts_v0 = [[p[0], p[1], p[2], q, r, s, t, u] for p,q,r,s,t,u in zip(t.path_v0,t.dQds_int_v0, t.dQds_max_v0, t.dQds_min_v0, t.dQds_pv_v0, t.ds_v0)]
         pts_v1 = [[p[0], p[1], p[2], q, r, s, t, u] for p,q,r,s,t,u in zip(t.path_v1, t.dQds_int_v1, t.dQds_max_v1, t.dQds_min_v1, t.dQds_pv_v1, t.ds_v1)]
         
-
-        h5file.create_array(t3d_hits_v0, 'track_%i'%(i), np.asarray(pts_v0), 'track hits')
-        h5file.create_array(t3d_hits_v1, 'track_%i'%(i), np.asarray(pts_v1), 'track hits')
-        i += 1
-
         t3d.append()
-    table.flush()
+        v0.append(pts_v0)
+        v1.append(pts_v1)
+
+def store_single_hits(h5file, i, j):
+    hit = h5file.root.singleHits.row
+
+
+    hv0 = dc.hits_list[i]
+    hv1 = dc.hits_list[j]
+
+        
+    hit['channel_v0'] = hv0.channel
+    hit['channel_v1'] = hv1.channel
+    hit['tdc_max_v0'] = hv0.max_t
+    hit['tdc_max_v1'] = hv1.max_t
+    hit['tdc_min_v0'] = hv0.min_t
+    hit['tdc_min_v1'] = hv1.min_t
+
+    hit['x']       = hv0.X
+    hit['y']       = hv1.X
+    hit['z']       = 0.5*(hv0.Z + hv1.Z)
+
+    hit['adc_max_v0'] = hv0.max_adc
+    hit['adc_min_v0'] = hv0.min_adc
+    hit['adc_max_v1'] = hv1.max_adc
+    hit['adc_min_v1'] = hv1.min_adc
+        
+    hit['charge_int_v0']  = hv0.charge_int
+    hit['charge_max_v0']  = hv0.charge_max
+    hit['charge_min_v0']  = hv0.charge_min
+    hit['charge_pv_v0']   = hv0.charge_pv
+
+    hit['charge_int_v1']  = hv1.charge_int
+    hit['charge_max_v1']  = hv1.charge_max
+    hit['charge_min_v1']  = hv1.charge_min
+    hit['charge_pv_v1']   = hv1.charge_pv
+
+    hit['charge_all_v0']  = hv0.charge_sh
+    hit['charge_all_v1']  = hv1.charge_sh
+
+    hit.append()
+
+
+def store_fft_data(h5file, ps):
+    fft = h5file.root.fft_muon.row
+    fft['PS_v0'] = ps[0]
+    fft['PS_v1'] = ps[1]
+    fft.append()
+
+def store_fft_fake(h5file, ps):
+    fft = h5file.root.fft_fake.row
+    fft['PS_v0'] = ps[0]
+    fft['PS_v1'] = ps[1]
+    fft.append()
+

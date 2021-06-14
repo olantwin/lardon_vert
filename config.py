@@ -21,7 +21,9 @@ view_type = {0:'Collection',1:'Induction'}
 evt_byte_size = 129528
 n_femb = 4
 
-ADCtofC = 33.7078 #from paper preprint (5.4e-3 ADCtick/e)
+ADCperfC = 33.7078 #from paper preprint (5.4e-3 ADCtick/e)
+AreaCorr = 1.269*4.
+#ADCperfC = 48.016 #from paper preprint (5.4e-3 ADCtick/e)
 
 """ BROKEN CHANNELS TO BE REMOVED FROM THE ANALYSIS"""
 
