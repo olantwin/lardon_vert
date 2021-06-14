@@ -124,14 +124,15 @@ name_out = cf.store_path + "/" +  outname + ".h5"
 print(name_out)
 
 output = tables.open_file(name_out, mode="w", title="Reconstruction Output")
+store.create_output(output)
 
-name_out_sh = cf.store_path + "/" +  outname + "_singlehits.h5"
-output_sh = tables.open_file(name_out_sh, mode="w", title="Reconstruction Output")
-store.create_single_hits(output_sh)
+#name_out_sh = cf.store_path + "/" +  outname + "_singlehits.h5"
+#output_sh = tables.open_file(name_out_sh, mode="w", title="Reconstruction Output")
+#store.create_single_hits(output_sh)
 
-name_out_ped = cf.store_path + "/" +  outname + "_pedestals.h5"
-output_ped = tables.open_file(name_out_ped, mode="w", title="Pedestals")
-store.create_all_pedestals(output_ped)
+#name_out_ped = cf.store_path + "/" +  outname + "_pedestals.h5"
+#output_ped = tables.open_file(name_out_ped, mode="w", title="Pedestals")
+#store.create_all_pedestals(output_ped)
 
 """ Build DAQ Channel <-> Analysis Channel correspondance """
 cmap.ChannelMapper()
@@ -151,6 +152,12 @@ plot.set_style()
 tstart = time.time()
 ievent_tot = 0
 
+
+nfake = 0
+ps_fake = np.zeros((2,64,324))
+ps_muon = np.zeros((2,64,324))
+
+n_events_single_hits = 0
 
 print(" =^=^=^=^=^=^=^=^=^=^=^=^ ")
 print(" RUNNING OVER ", len(data_list), " FILES ")
@@ -184,10 +191,8 @@ for fbin in data_list:
 
 
     for ievent in range(nevent):
-        #if(ievent < 16): continue
         ievent_tot += 1
         if(ntotevent > 0 and ievent_tot >= ntotevent):
-            #print("bye bye")
             break
 
         if(verbose):
@@ -207,6 +212,10 @@ for fbin in data_list:
         if(verbose):
             dc.evt_list[-1].dump()
 
+        ini_ped_mean = np.mean(dc.data, axis=2)
+        ini_ped_rms = np.std(dc.data, axis=2)
+
+
         ped.ini_pedestal()
         ped.subtract_ped_mean()
         ped.store_raw_ped_rms()
@@ -219,8 +228,8 @@ for fbin in data_list:
         #plot.plot_ed_data(option="rawzoompres", to_be_shown=False, adc_min=-10, adc_max=10)
         #plot.plot_event_ped_and_rms(option='initial', to_be_shown=True)
             
-        """ this seems completely useless for the 50L data """
-        #ps = noise.FFTLowPass(lowpasscut, freqlines)            
+        """ FFT seems completely useless for the 50L data """
+        ps = noise.FFTLowPass(lowpasscut, freqlines)            
         #plot.plot_fft_ps(ps, to_be_shown=False)
 
 
@@ -264,18 +273,22 @@ for fbin in data_list:
         if(verbose):
             print(" found ", dc.evt_list[-1].nHits[0], " and ", dc.evt_list[-1].nHits[1], " hits")
 
-        if(dc.evt_list[-1].nHits[0] > 0 and dc.evt_list[-1].nHits[0] < 4 and dc.evt_list[-1].nHits[1] > 0 and dc.evt_list[-1].nHits[1] < 4):
-            matched_hits = ar.argon_39_finder(5)
-            if(len(matched_hits)>0):
-                """
-                for h in dc.hits_list:
-                    h.dump()
-                """
-                for i, j in matched_hits:
-                    store.store_single_hits(output_sh, i, j)
-                    #print("---->>> ", i, " ", j)
-                #plot.plot_ed_data_and_hits(option="ar39test", to_be_shown=True, adc_min=-10, adc_max=10)
-            #store.store_single_hits(output_sh)
+
+        """ nothing found, store empty event case """
+        if(np.sum(dc.evt_list[-1].nHits) == 0):
+
+            filt_ped_mean = np.mean(dc.data, axis=2)
+            filt_ped_rms = np.std(dc.data, axis=2)
+            ps_fake += ps
+            nfake += 1 
+
+            store.store_pedestals_fake(output, ini_ped_mean, ini_ped_rms, filt_ped_mean, filt_ped_rms)
+            store.store_event(output)
+            continue
+
+
+            
+
         """
         if(dc.evt_list[-1].nHits[0] > 0 and dc.evt_list[-1].nHits[0] < 4 and dc.evt_list[-1].nHits[1] > 0 and dc.evt_list[-1].nHits[1] < 4):
             for h in dc.hits_list:
@@ -283,9 +296,7 @@ for fbin in data_list:
             plot.plot_ed_data_and_hits(option="ar39test", to_be_shown=True, adc_min=-10, adc_max=10)
         """
 
-        if(np.sum(dc.evt_list[-1].nHits) == 0):
-            store.store_all_pedestals(output_ped)
-            continue
+        #plot.plot_ed_data_and_hits(option="pres", to_be_shown=False, adc_min=-10, adc_max=10)
         #plot.plot_2dview_hits(option="test", to_be_shown=False)
     
     
@@ -312,6 +323,23 @@ for fbin in data_list:
         """ parameters are : min distance in between 2 tracks end points, slope error tolerance, extrapolated distance tolerance + filter input parameters"""
         trk2d.stitch_tracks(10., 10., 4., 0.5, 1., 3., 1)
 
+
+        """ no 2D tracks found, search for single hits then """
+        """ stop the reco here anyway """
+        if(np.sum(dc.evt_list[-1].nTracks2D) == 0 and dc.evt_list[-1].nHits[0] < 6 and dc.evt_list[-1].nHits[1] < 6):
+
+            matched_hits = ar.argon_39_finder(3)
+            
+            if(len(matched_hits)>0):
+                n_events_single_hits += 1
+                for i, j in matched_hits:
+                    store.store_single_hits(output, i, j)
+            dc.evt_list[-1].nSingleHits = len(matched_hits)
+            store.store_event(output)
+            continue
+
+
+
         #plot.plot_2dview_hits_2dtracks(option="test", to_be_shown=False)
     
 
@@ -323,6 +351,8 @@ for fbin in data_list:
         if(verbose):
             print(" Found ", dc.evt_list[-1].nTracks3D, " 3D Tracks ")
 
+
+        store.store_event(output)
         if(dc.evt_list[-1].nTracks3D > 0):
             #plot.plot_ed_data_and_hits(option="3D", to_be_shown=True, adc_min=-10, adc_max=10)
             #plot.plot_3d("test", False)
@@ -330,13 +360,13 @@ for fbin in data_list:
                 [x.dump() for x in dc.tracks3D_list]
                 dc.evt_list[-1].dump_reco()
 
-            gr = store.new_event(output, nevent_mu)
-            store.store_event(output, gr)
-            store.store_pedestal(output, gr)
-            store.store_hits(output, gr)
-            store.store_tracks2D(output, gr)
-            store.store_tracks3D(output, gr)
-        
+                        
+            store.store_pedestals_data(output)
+            store.store_hits(output)
+            store.store_tracks2D(output)
+            store.store_tracks3D(output)
+
+            ps_muon += ps
             nevent_mu += 1
 
         """
@@ -345,10 +375,16 @@ for fbin in data_list:
         """
 
     data.close()
-store.store_infos(output, day, run, ievent_tot, nevent_mu, time.time())
+store.store_infos(output, day, run, ievent_tot, nevent_mu, n_events_single_hits, time.time())
+
+ps_muon /= nevent_mu
+store.store_fft_data(output, ps_muon)
+ps_fake /= nfake
+store.store_fft_fake(output, ps_fake)
+
 output.close()
-output_sh.close()
-output_ped.close()
+#output_sh.close()
+#output_ped.close()
 tottime = time.time() - tstart
 print(" Has reconstructed ", nevent_mu, " events with at-least one 3D track out of ", ievent_tot, " events")
 print(" TOTAL RUNNING TIME %.3f s == %.3f s/evt"% (tottime, tottime/ievent_tot))

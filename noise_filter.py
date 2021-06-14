@@ -145,19 +145,19 @@ def FFTLowPass(lowpass, freqlines) :
 
 
     """get power spectrum (before cut)"""
-    #ps = 10.*np.log10(np.abs(fdata)+1e-1) 
-
+    ps = 10.*np.log10(np.abs(fdata)+1e-1) 
+    return ps
     
     """Apply filter"""
-    fdata *= gauss_cut[None, None, :]
+    #fdata *= gauss_cut[None, None, :]
 
     """go back to time"""
-    dc.data = np.fft.irfft(fdata)
+    #dc.data = np.fft.irfft(fdata)
 
 
     """get power spectrum after cut"""
-    ps = 10.*np.log10(np.abs(fdata)+1e-1) 
-    return ps
+    #ps = 10.*np.log10(np.abs(fdata)+1e-1) 
+    #return ps
 
     
 def centered_median_filter(array, size):
