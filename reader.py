@@ -191,9 +191,9 @@ for fbin in data_list:
 
 
     for ievent in range(nevent):
-        ievent_tot += 1
         if(ntotevent > 0 and ievent_tot >= ntotevent):
             break
+        ievent_tot += 1
 
         if(verbose):
             print("-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-")
