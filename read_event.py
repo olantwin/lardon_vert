@@ -47,10 +47,13 @@ def get_file_infos(data_name, bit_size):
 
 
 def shape_and_store(data_raw):
-    data_raw = np.reshape(data_raw, (-1, 32)).T
-    data_raw = np.reshape(data_raw, (32, 4, 646))
+    """
+    Difference between arrays of times and arrays of channels
+    """
+    data_raw = np.reshape(data_raw, (-1, 32)).T # split into 32 channel chunks
+    data_raw = np.reshape(data_raw, (32, 8, 646)) # Reshape into
     data_raw = data_raw.swapaxes(0,1)
-    data_raw = np.reshape(data_raw, (128, 646))
+    data_raw = np.reshape(data_raw, (256, 646))
 
     """reshape the array and subtract reference pedestal"""    
     for idq in range(cf.n_ChanTot):

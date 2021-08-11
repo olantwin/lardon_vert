@@ -3,10 +3,10 @@ store_path = "/eos/user/l/lzambell/analysis/lardon_vert/50L_spring20/reco"
 
 file_prename = "WIB00step18_FEMB_B8_"
 
-n_View = 2
+n_View = 4
 n_Sample = 646
 n_ChanPerView = 64
-n_ChanTot = 128 # = n_View * n_ChanPerCRP
+n_ChanTot = n_View * n_ChanPerView
 n_Sampling = 0.5 #in mu-seconds
 ChanPitch = 0.5 #cm
 LAr_Temperature = 87.5 #(?)
@@ -15,11 +15,11 @@ Anode_Z = 52. #cm
 len_det_x = 32. #cm
 len_det_y = 32. #cm
 
-view_type = {0:'Collection',1:'Induction'}
+view_type = {0:'Collection',1:'Induction', 2: 'Induction', 3: 'Shield'}
 
 
-evt_byte_size = 129528
-n_femb = 4
+evt_byte_size = 129528 # TODO update
+n_femb = 8 #Card number?
 
 ADCperfC = 33.7078 #from paper preprint (5.4e-3 ADCtick/e)
 AreaCorr = 1.269*4.
