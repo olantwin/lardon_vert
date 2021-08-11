@@ -54,7 +54,7 @@ def ChannelMapper():
 
 
 def DAQToAna(daqch):
-    conn = int(daqch/n_ChPerConnector)
+    conn = daqch // n_ChPerConnector
     ch_femb = 7 - (daqch-conn*n_ChPerConnector) + conn*n_ChPerConnector
 
     ch_global = inverse_mapper[ch_femb] - 1
