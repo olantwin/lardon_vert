@@ -2,6 +2,8 @@ import sys
 import os
 import glob
 
+import argparse
+
 import numpy as np
 import time 
 import tables as tables
@@ -25,28 +27,15 @@ import argon39 as ar
 import plotting as plot
 
 
-def need_help():
-    print("Usage: python reader.py ")
-    print(" FOR ONLY ONE BINARY FILE: ")
-    print(" -file <file name> ")
-    print(" TO RECONSTRUCT A WHOLE DAY/RUN: ")
-    print(" -day <MM_DD_YYYY> -run <number of runXXtri folder>")
-    print(" -n   <number of event to process in a file>  [default (or -1) is all]")
-    print(" -ntot   <Total number of event to process>  [default (or -1) is all]")
-    print(" -out <output name optn>")
-    print(" -v :: activate verbose option ")
-    print(" -h print this message")
-    
-    sys.exit()
-    
-
-if len(sys.argv) == 1:
-    need_help()
-else:
-    for index, arg in enumerate(sys.argv):
-        if arg in ['-h'] :
-            need_help()
-            
+parser = argparse.ArgumentParser()
+parser.add_argument('-file', dest='file_in', help='For reading a single binary file (relative to `data_path`)', default='')
+parser.add_argument('-out', help='Output name relative to `store_path`', default='')
+parser.add_argument('-day', dest='day', help='MM_DD_YYYY', default='')
+parser.add_argument('-run', dest='run', help='number of runXXtri folder', default=-1, type=int)
+parser.add_argument('-n', dest='n', type=int, help='number of events to process in a file [default (or -1) is all]', default=-1)
+parser.add_argument('-ntot', dest='ntot', type=int, help='number of events to process [default (or -1) is all]', default=-1)
+parser.add_argument('-v', '--verbose', required=False, action='store_true', help='Be verbose')
+args = parser.parse_args()
 
 """ Reconstruction parameters """
 """ not usefull in 50 L data """
@@ -62,37 +51,19 @@ signal_thresh_2  = [2.5, 1.5, 2.]
 adc_thresh       = [10., 10., -20.]
 coherent_groups  = [64]
 
-outname_option = ""
-nevent_per_file = -1 
-ntotevent = -1
 nevent_mu = 0
-file_in = ""
-day = ""
-run = -1
 
-verbose = False
+verbose = args.verbose
 
-for index, arg in enumerate(sys.argv):
-    if arg in ['-file'] and len(sys.argv) > index + 1:
-        file_in = sys.argv[index + 1]
-    elif arg in ['-day'] and len(sys.argv) > index + 1:
-        day = sys.argv[index + 1]
-    elif arg in ['-run'] and len(sys.argv) > index + 1:
-        run = int(sys.argv[index + 1])
-    elif arg in ['-n'] and len(sys.argv) > index + 1:
-        nevent_per_file = int(sys.argv[index + 1])
-    elif arg in ['-ntot'] and len(sys.argv) > index + 1:
-        ntotevent = int(sys.argv[index + 1])
-    elif arg in ['-out'] and len(sys.argv) > index + 1:
-        outname_option = sys.argv[index + 1]
-    elif arg in ['-v']:
-        verbose = True
-    
-
-
+file_in = args.file_in
+day = args.day
+run = args.run
+nevent_per_file = args.n
+ntotevent = args.ntot
+outname_option = args.out
 
 if(len(file_in) == 0 and len(day)==0 and run < 0):
-    need_help()
+    parser.print_help()
 data_list = []
 
 if(len(file_in) > 0 and len(day)==0 and run < 0):
@@ -112,7 +83,7 @@ elif(len(file_in) == 0 and len(day) > 0 and run > 0):
     print("--> ", outname)
     data_list.extend(glob.glob(name_in+"/*.bin"))
 else:
-    need_help()
+    parser.print_help()
 
 
 
