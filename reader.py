@@ -154,8 +154,8 @@ ievent_tot = 0
 
 
 nfake = 0
-ps_fake = np.zeros((2,64,324))
-ps_muon = np.zeros((2,64,324))
+ps_fake = np.zeros((4,64,324))
+ps_muon = np.zeros((4,64,324))
 
 n_events_single_hits = 0
 
