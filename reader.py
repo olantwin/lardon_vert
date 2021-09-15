@@ -3,6 +3,7 @@ import os
 import glob
 
 import argparse
+import dateutil.parser
 
 import numpy as np
 import time 
@@ -26,12 +27,19 @@ import argon39 as ar
 
 import plotting as plot
 
+def parse_day(datestring):
+    date = dateutil.parser.parse(datestring, fuzzy=True)
+    return f"{date.month:02d}_{date.day:02d}_{date.year}"
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-file', dest='file_in', help='For reading a single binary file (relative to `data_path`)', default='')
+usage = """%(prog)s [-h] (-file FILE_IN | -run RUN -day DD_MM_YYYY) [-out OUT]
+                 [-n N] [-ntot NTOT] [-v]"""
+
+parser = argparse.ArgumentParser(usage=usage)
+exclusive = parser.add_mutually_exclusive_group(required=True)
+exclusive.add_argument('-file', dest='file_in', help='For reading a single binary file (relative to `data_path`)', default=None)
+exclusive.add_argument('-run', dest='run', help='number of runXXtri folder', default=-1, type=int)
+parser.add_argument('-day', dest='day', metavar='DD_MM_YYYY', help='Freeform date parsed by dateutil. Required when not specifying a file directly.', default=None, type=parse_day)
 parser.add_argument('-out', help='Output name relative to `store_path`', default='')
-parser.add_argument('-day', dest='day', help='MM_DD_YYYY', default='')
-parser.add_argument('-run', dest='run', help='number of runXXtri folder', default=-1, type=int)
 parser.add_argument('-n', dest='n', type=int, help='number of events to process in a file [default (or -1) is all]', default=-1)
 parser.add_argument('-ntot', dest='ntot', type=int, help='number of events to process [default (or -1) is all]', default=-1)
 parser.add_argument('-v', '--verbose', required=False, action='store_true', help='Be verbose')
@@ -62,29 +70,26 @@ nevent_per_file = args.n
 ntotevent = args.ntot
 outname_option = args.out
 
-if(len(file_in) == 0 and len(day)==0 and run < 0):
-    parser.print_help()
 data_list = []
 
-if(len(file_in) > 0 and len(day)==0 and run < 0):
+if(file_in):
     name_in = cf.data_path + "/" + file_in
     if(os.path.exists(name_in) is False):
-        print(" ERROR ! there is no ", name_in, " ! ")
+        print(" ERROR ! There is no ", name_in, " ! ")
         sys.exit()
     outname = "reco_tracks"
     data_list.append(name_in)
-
-elif(len(file_in) == 0 and len(day) > 0 and run > 0):
+elif(day and run):
     name_in = cf.data_path + "/Rawdata_" + day + "/run%02dtri"%run
     if(os.path.exists(name_in) is False):
-        print(" ERROR ! there is no ", name_in, " ! ")
+        print(" ERROR ! There is no ", name_in, " ! ")
         sys.exit()
     outname = day + "_run" + str(run) + "_reco_tracks"
     print("--> ", outname)
     data_list.extend(glob.glob(name_in+"/*.bin"))
 else:
-    parser.print_help()
-
+    print(" ERROR ! No day provided.")
+    sys.exit()
 
 
 if(outname_option):
