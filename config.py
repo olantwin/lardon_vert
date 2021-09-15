@@ -3,6 +3,13 @@ store_path = "/eos/user/l/lzambell/analysis/lardon_vert/50L_spring20/reco"
 
 file_prename = "WIB00step18_FEMB_B8_"
 
+physical_views = 3
+physical_channels_per_view = [64,64,54]
+angle_of_view = [0, 90, 48]  # degrees
+pitch_of_view = [0.5, 0.5, 0.87]  # cm
+len_of_view = [32, 32, 48] #cm
+title_of_view = ['X [cm]', 'Y [cm]', f'{angle_of_view[2]}° [cm]']
+
 n_View = 4
 n_Sample = 646
 n_ChanPerView = 64

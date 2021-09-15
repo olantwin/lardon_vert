@@ -21,8 +21,10 @@ cmap_ed = cc.cm.diverging_tritanopic_cwr_75_98_c20
 def draw(view, ax=None, t_min = -1, t_max = -1, ch_min = -1, ch_max = -1, adc_min=def_adc_min, adc_max=def_adc_max):
 
     ax = plt.gca() if ax is None else ax
-    
-    ax.imshow(dc.data[view, :, :].transpose(), 
+
+    channels = cf.physical_channels_per_view[view]
+
+    ax.imshow(dc.data[view, :channels, :].transpose(),
               origin = 'lower', 
               aspect = 'auto', 
               interpolation='none',
@@ -83,54 +85,52 @@ def plot_ed_zoom(view, t_min = -1, t_max = -1, ch_min = -1, ch_max = -1, option=
 
 
 
-def plot_ed(nameout="", option=None, to_be_shown=False, adc_min=def_adc_min, adc_max=def_adc_max):
+def plot_ed(nameout="", option=None, to_be_shown=False, draw_hits=False, adc_min=def_adc_min, adc_max=def_adc_max):
 
 
-    fig = plt.figure(figsize=(9,4))
+    fig = plt.figure(figsize=(3*cf.physical_views ,4))
     gs = gridspec.GridSpec(nrows=2, 
-                           ncols=3,
+                           ncols=cf.physical_views,
                            height_ratios=[1, 10])
     ax_col = fig.add_subplot(gs[0,:])
-    ax_v0  = fig.add_subplot(gs[1, 0])
-    ax_v1  = fig.add_subplot(gs[1, 1], sharey=ax_v0)
-    ax_v2  = fig.add_subplot(gs[1, 2], sharey=ax_v0)
-    
+    axes = list(range(cf.physical_views))
+    axes[0]  = fig.add_subplot(gs[1, 0])
+    rectangles = [[]]
+    for view in range(1, cf.physical_views):
+        axes[view]  = fig.add_subplot(gs[1, view], sharey=axes[0])
+        plt.setp(axes[view].get_yticklabels(), visible=False)
+        rectangles.append([])
+
+    if draw_hits:
+        for hit in dc.hits_list:
+            rectangles[hit.view].append(
+                patches.Rectangle(
+                    (hit.channel - 0.5, hit.start),
+                    1,
+                    hit.stop - hit.start,
+                    linewidth=1,
+                    edgecolor='k',
+                    facecolor='none'
+                )
+            )
 
     """ draw data """
 
-    """ View 0 """
-    ax_v0 = draw(0, ax=ax_v0, adc_min=adc_min, adc_max=adc_max)
-    ylow, yup = ax_v0.get_ylim()
-    # ax_v0.plot([32, 32], [ylow, yup], ls='--', c='k')
-    ax_v0.set_title('View 0 ' + '['+cf.view_type[0]+']')
-    ax_v0.set_ylabel('Time')
+    for view in range(cf.physical_views):
+        axes[view] = draw(view, ax=axes[view], adc_min=adc_min, adc_max=adc_max)
+        axes[view].set_title(f'View {view} [{cf.view_type[0]}]')
+        axes[view].set_xlabel('View Channel')
+        for rectangle in rectangles[view]:
+           axes[view].add_patch(rectangle)
 
-    """ View 1 """
-    ax_v1 = draw(1, ax=ax_v1, adc_min=adc_min, adc_max=adc_max)
-    ax_v1.set_title('View 1 ' + '['+cf.view_type[1]+']')
-    ax_v1.set_ylabel('Time')
-    # ax_v1.yaxis.tick_right()
-    # ax_v1.yaxis.set_label_position("right")
-
-    """ View 1 """
-    ax_v2 = draw(2, ax=ax_v2, adc_min=adc_min, adc_max=adc_max)
-    ax_v2.set_title('View 2 ' + '['+cf.view_type[2]+']')
-    ax_v2.set_ylabel('Time')
-    ax_v2.yaxis.tick_right()
-    ax_v2.yaxis.set_label_position("right")
-        
-    ax_v0.set_xlabel('View Channel')
-    ax_v1.set_xlabel('View Channel')
-    ax_v2.set_xlabel('View Channel')
-
-
-
-    ax_v0.yaxis.set_major_locator(plt.MaxNLocator(4))
+    axes[0].set_ylabel('Time')
+    axes[0].yaxis.set_major_locator(plt.MaxNLocator(4))
+    axes[cf.physical_views-1].yaxis.tick_right()
+    axes[cf.physical_views-1].yaxis.set_label_position("right")
 
     ax_col.set_title('Collected Charge [ADC]')
-        
-                         
-    cb = fig.colorbar(ax_v0.images[-1], cax=ax_col, orientation='horizontal')
+
+    cb = fig.colorbar(axes[0].images[-1], cax=ax_col, orientation='horizontal')
     cb.ax.xaxis.set_ticks_position('top')
     cb.ax.xaxis.set_label_position('top')
         
