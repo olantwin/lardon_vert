@@ -88,11 +88,12 @@ def plot_ed(nameout="", option=None, to_be_shown=False, adc_min=def_adc_min, adc
 
     fig = plt.figure(figsize=(9,4))
     gs = gridspec.GridSpec(nrows=2, 
-                           ncols=2, 
+                           ncols=3,
                            height_ratios=[1, 10])
     ax_col = fig.add_subplot(gs[0,:])
     ax_v0  = fig.add_subplot(gs[1, 0])
     ax_v1  = fig.add_subplot(gs[1, 1], sharey=ax_v0)
+    ax_v2  = fig.add_subplot(gs[1, 2], sharey=ax_v0)
     
 
     """ draw data """
@@ -100,7 +101,7 @@ def plot_ed(nameout="", option=None, to_be_shown=False, adc_min=def_adc_min, adc
     """ View 0 """
     ax_v0 = draw(0, ax=ax_v0, adc_min=adc_min, adc_max=adc_max)
     ylow, yup = ax_v0.get_ylim()
-    ax_v0.plot([32, 32], [ylow, yup], ls='--', c='k')
+    # ax_v0.plot([32, 32], [ylow, yup], ls='--', c='k')
     ax_v0.set_title('View 0 ' + '['+cf.view_type[0]+']')
     ax_v0.set_ylabel('Time')
 
@@ -108,12 +109,19 @@ def plot_ed(nameout="", option=None, to_be_shown=False, adc_min=def_adc_min, adc
     ax_v1 = draw(1, ax=ax_v1, adc_min=adc_min, adc_max=adc_max)
     ax_v1.set_title('View 1 ' + '['+cf.view_type[1]+']')
     ax_v1.set_ylabel('Time')
-    ax_v1.yaxis.tick_right()
-    ax_v1.yaxis.set_label_position("right")
+    # ax_v1.yaxis.tick_right()
+    # ax_v1.yaxis.set_label_position("right")
 
+    """ View 1 """
+    ax_v2 = draw(2, ax=ax_v2, adc_min=adc_min, adc_max=adc_max)
+    ax_v2.set_title('View 2 ' + '['+cf.view_type[2]+']')
+    ax_v2.set_ylabel('Time')
+    ax_v2.yaxis.tick_right()
+    ax_v2.yaxis.set_label_position("right")
         
     ax_v0.set_xlabel('View Channel')
     ax_v1.set_xlabel('View Channel')
+    ax_v2.set_xlabel('View Channel')
 
 
 
