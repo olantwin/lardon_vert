@@ -6,6 +6,8 @@ import data_containers as dc
 class Infos(IsDescription):
     date         = StringCol(10)
     run          = UInt8Col()
+    commit        = UInt8Col()
+    nviews        = UInt8Col()
     #time_s       = UInt32Col()
     #time_ms      = UInt8Col()
     nEventTot     = UInt32Col()
@@ -30,21 +32,28 @@ class Pedestal(IsDescription):
     ini_rms_v0    = Float16Col(shape=(cf.n_ChanPerView))
     ini_mean_v1   = Float16Col(shape=(cf.n_ChanPerView))
     ini_rms_v1    = Float16Col(shape=(cf.n_ChanPerView))
+    ini_mean_v2   = Float16Col(shape=(cf.n_ChanPerView))
+    ini_rms_v2    = Float16Col(shape=(cf.n_ChanPerView))
 
     fin_mean_v0   = Float16Col(shape=(cf.n_ChanPerView))
     fin_rms_v0    = Float16Col(shape=(cf.n_ChanPerView))
     fin_mean_v1   = Float16Col(shape=(cf.n_ChanPerView))
     fin_rms_v1    = Float16Col(shape=(cf.n_ChanPerView))
+    fin_mean_v2   = Float16Col(shape=(cf.n_ChanPerView))
+    fin_rms_v2    = Float16Col(shape=(cf.n_ChanPerView))
 
 
 class SingleHits(IsDescription):
     channel_v0 = UInt16Col()
     channel_v1 = UInt16Col()
+    channel_v2 = UInt16Col()
 
     tdc_max_v0 = UInt16Col()
     tdc_max_v1 = UInt16Col()
+    tdc_max_v2 = UInt16Col()
     tdc_min_v0 = UInt16Col()
     tdc_min_v1 = UInt16Col()
+    tdc_min_v2 = UInt16Col()
 
     x          = Float16Col()
     y          = Float16Col()
@@ -52,20 +61,27 @@ class SingleHits(IsDescription):
 
     adc_max_v0 = Float16Col()
     adc_max_v1 = Float16Col()
+    adc_max_v2 = Float16Col()
     adc_min_v0 = Float16Col()
     adc_min_v1 = Float16Col()
+    adc_min_v2 = Float16Col()
     
     charge_int_v0 = Float16Col()
     charge_int_v1 = Float16Col()
+    charge_int_v2 = Float16Col()
     charge_max_v0 = Float16Col()
     charge_max_v1 = Float16Col()
+    charge_max_v2 = Float16Col()
     charge_min_v0 = Float16Col()
     charge_min_v1 = Float16Col()
+    charge_min_v2 = Float16Col()
     charge_pv_v0  = Float16Col()
     charge_pv_v1  = Float16Col()
+    charge_pv_v2  = Float16Col()
 
     charge_all_v0 = Float16Col()
     charge_all_v1 = Float16Col()
+    charge_all_v2 = Float16Col()
 
 
 class Hits(IsDescription):
@@ -139,6 +155,7 @@ class Tracks3D(IsDescription):
 class FFT(IsDescription):
     PS_v0 = Float16Col(shape=(64, 324))
     PS_v1 = Float16Col(shape=(64, 324))
+    PS_v2 = Float16Col(shape=(64, 324))
 
 
 def create_output(h5file):
@@ -150,11 +167,13 @@ def create_output(h5file):
 
     h5file.create_table("/", 'tracks2D', Tracks2D, "Tracks 2D")
     h5file.create_vlarray("/", 'trk2D_v0', Float32Atom(shape=(6)), "2D Track V0 (x, z, qint, qmax, qmin, qpv)")  
-    h5file.create_vlarray("/", 'trk2D_v1', Float32Atom(shape=(6)), "2D Track V1 (x, z, qint, qmax, qmin, qpv)")  
+    h5file.create_vlarray("/", 'trk2D_v1', Float32Atom(shape=(6)), "2D Track V1 (x, z, qint, qmax, qmin, qpv)")
+    h5file.create_vlarray("/", 'trk2D_v2', Float32Atom(shape=(6)), "2D Track V2 (x, z, qint, qmax, qmin, qpv)")
 
     h5file.create_table("/", 'tracks3D', Tracks3D, "Tracks 3D")
-    h5file.create_vlarray("/", 'trk3D_v0', Float32Atom(shape=(8)), "3D Track V0 (x, y, z, qint, qmax, qmin, qpv, ds)")  
-    h5file.create_vlarray("/", 'trk3D_v1', Float32Atom(shape=(8)), "3D Track V1 (x, y, z, qint, qmax, qmin, qpv, ds)")  
+    h5file.create_vlarray("/", 'trk3D_v0', Float32Atom(shape=(8)), "3D Track V0 (x, y, z, qint, qmax, qmin, qpv, ds)")
+    h5file.create_vlarray("/", 'trk3D_v1', Float32Atom(shape=(8)), "3D Track V1 (x, y, z, qint, qmax, qmin, qpv, ds)")
+    h5file.create_vlarray("/", 'trk3D_v2', Float32Atom(shape=(8)), "3D Track V2 (x, y, z, qint, qmax, qmin, qpv, ds)")
 
     h5file.create_table("/", 'singleHits', SingleHits, "Single 3D Hits")
     h5file.create_table("/", 'fft_fake', FFT, "FFT Empty Events")
@@ -206,15 +225,11 @@ def store_pedestals_data(h5file):
         fin_mean[x.view, x.vchan] = x.evt_ped
 
 
-    ped['ini_mean_v0'] = ini_mean[0]
-    ped['ini_rms_v0']  = ini_rms[0]
-    ped['ini_mean_v1'] = ini_mean[1]
-    ped['ini_rms_v1']  = ini_rms[1]
-
-    ped['fin_mean_v0'] = fin_mean[0]
-    ped['fin_rms_v0']  = fin_rms[0]
-    ped['fin_mean_v1'] = fin_mean[1]
-    ped['fin_rms_v1']  = fin_rms[1]
+    for view in range(cf.physical_views):
+        ped[f'ini_mean_v{view}'] = ini_mean[view]
+        ped[f'ini_rms_v{view}']  = ini_rms[view]
+        ped[f'fin_mean_v{view}'] = fin_mean[view]
+        ped[f'fin_rms_v{view}']  = fin_rms[view]
 
     ped.append()
 
@@ -222,15 +237,11 @@ def store_pedestals_fake(h5file, ini_mean, ini_rms, fin_mean, fin_rms):
     ped = h5file.root.pedestals_fake.row
     
 
-    ped['ini_mean_v0'] = ini_mean[0]
-    ped['ini_rms_v0']  = ini_rms[0]
-    ped['ini_mean_v1'] = ini_mean[1]
-    ped['ini_rms_v1']  = ini_rms[1]
-
-    ped['fin_mean_v0'] = fin_mean[0]
-    ped['fin_rms_v0']  = fin_rms[0]
-    ped['fin_mean_v1'] = fin_mean[1]
-    ped['fin_rms_v1']  = fin_rms[1]
+    for view in range(cf.physical_views):
+        ped[f'ini_mean_v{view}'] = ini_mean[view]
+        ped[f'ini_rms_v{view}']  = ini_rms[view]
+        ped[f'fin_mean_v{view}'] = fin_mean[view]
+        ped[f'fin_rms_v{view}']  = fin_rms[view]
 
     ped.append()
 
@@ -264,8 +275,7 @@ def store_hits(h5file):
 
 def store_tracks2D(h5file):
     t2d = h5file.root.tracks2D.row
-    v0  = h5file.root.trk2D_v0
-    v1  = h5file.root.trk2D_v1
+    views = h5file.root.trk2D_v0, h5file.root.trk2D_v1, h5file.root.trk2D_v2
 
     for t in dc.tracks2D_list:
         t2d['view']      = t.view
@@ -292,10 +302,7 @@ def store_tracks2D(h5file):
 
         t2d.append()
 
-        if(t.view==0):
-            v0.append(pts)
-        else:
-            v1.append(pts)
+        views[t.view].append(pts)
 
 def store_tracks3D(h5file):
     t3d = h5file.root.tracks3D.row
@@ -312,14 +319,15 @@ def store_tracks3D(h5file):
         t3d['z_end']     = t.end_z
 
         t3d['chi2']      = t.chi2
-        t3d['nHits']     = [t.nHits_v0, t.nHits_v1]
-        t3d['len_straight'] = [t.len_straight_v0, t.len_straight_v1]
-        t3d['len_path']     = [t.len_path_v0, t.len_path_v1]
+        # TODO add sensible values for third view
+        t3d['nHits']     = [t.nHits_v0, t.nHits_v1, 0, 0]
+        t3d['len_straight'] = [t.len_straight_v0, t.len_straight_v1, 0, 0]
+        t3d['len_path']     = [t.len_path_v0, t.len_path_v1, 0, 0]
 
-        t3d['total_charge_int'] = [t.tot_charge_int_v0, t.tot_charge_int_v1]
-        t3d['total_charge_max'] = [t.tot_charge_max_v0, t.tot_charge_max_v1]
-        t3d['total_charge_min'] = [t.tot_charge_min_v0, t.tot_charge_min_v1]
-        t3d['total_charge_pv']  = [t.tot_charge_pv_v0,  t.tot_charge_pv_v1]
+        t3d['total_charge_int'] = [t.tot_charge_int_v0, t.tot_charge_int_v1, 0, 0]
+        t3d['total_charge_max'] = [t.tot_charge_max_v0, t.tot_charge_max_v1, 0, 0]
+        t3d['total_charge_min'] = [t.tot_charge_min_v0, t.tot_charge_min_v1, 0, 0]
+        t3d['total_charge_pv']  = [t.tot_charge_pv_v0,  t.tot_charge_pv_v1, 0, 0]
 
 
         t3d['theta_ini'] = t.ini_theta
